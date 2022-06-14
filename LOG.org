@@ -5,6 +5,22 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv
 
+* Tuesday, June 14, 2022
+:LOGBOOK:
+CLOCK: [2022-06-14 Tue 14:05]
+CLOCK: [2022-06-14 Tue 09:34]--[2022-06-14 Tue 11:02] =>  1:28
+:END:
+- After mucking-about with multidb and schemas, it looks like I misunderstood what ~multidb~ is all about
+  * My app only uses one database, so the ~--multidb~ option when initializing alembic is unnecessary
+  * Multiple schemas can be used with a single database by way of the ~--name~ option and corresponding section in ~alembic.ini~
+- Alembic Test #3 was supposed to use the ~development~ schema, ~media_library~ but it used ~alembic_test~, as specified in ~.env~
+- Alembic Test #4 was successful, after I temporarily renamed ~dt_fileinfo~, in order to verify that the upgrade script works
+  * It should be noted that Alembic uses the environment set in ~models.py~, not ~alembic.ini~
+** Multi-Schema Alembic Configuration has been achieved
+- I haven't created a baseline for the ~developmentdb~ database, yet, but I created a few database and schema combinations that enabled me to configure Alembic to work with the databases and schemas of my choosing, as defined in ~models.py~, which calls ~config.py~, which loads environment variables stored in ~.env~ files
+- ~alembic.ini~ needs to have named sections that correspond to the database/schema combinations in the application, and ~version_locations~ defined for each one
+- See [[./src/musichistory/alembic_history][alembic_history]] for the command history of tests performed
+
 * Monday, June 13, 2022
 :LOGBOOK:
 CLOCK: [2022-06-13 Mon 20:07]--[2022-06-13 Mon 22:11] =>  2:04

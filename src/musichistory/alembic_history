@@ -1,0 +1,78 @@
+alembic current
+alembic --version
+alembic --name testing revision -m 'Initial dev build' --autogenerate
+alembic --name testing revision -m 'Initial dev build' --autogenerate &>alembic.log
+alembic --name testing revision -m 'Initial dev build' --autogenerate &>alembic.log
+alembic --name testing revision -m 'Initial dev build' --autogenerate
+alembic --name testing revision -m 'Testing alembic'
+alembic --name testing revision -m 'Testing alembic'
+alembic --name testing revision -m 'Test Alembic' --autogenerate
+alembic --name testing revision -m 'Test Alembic' --autogenerate
+alembic --help
+alembic ensure_version
+alembic --name production ensure_version
+alembic --name production ensure_version
+alembic --name testing revision -m 'Test Alembic' --autogenerate
+alembic --name testing revision -m 'Test Alembic' --autogenerate
+alembic init alembic
+alembic revision -m 'Test Alembic' --autogenerate
+alembic revision -m 'Test Alembic' --autogenerate
+alembic revision -m 'Test Alembic' --autogenerate
+alembic revision -m 'Test Alembic' --autogenerate
+alembic upgrade
+alembic upgrade 0570e0f70bf5
+alembic downgrade 0570e0f70bf5
+alembic downgrade 0570e0f70bf5
+alembic downgrade
+alembic downgrade 0570e0f70bf5
+alembic revision -m 'Test Alembic' --autogenerate
+alembic revision -m 'Test Alembic 2' --autogenerate
+alembic --name testing revision -m 'Test Alembic 2' --autogenerate
+alembic --name testing revision -m 'Test Alembic 2' --autogenerate
+alembic --name testing upgrade
+alembic --help
+alembic --name testing upgrade 7c551b48eb1c
+alembic --name testing downgrade 7c551b48eb1c
+alembic --name testing downgrade
+alembic --name testing downgrade head
+alembic --name testing downgrade 7c551b48eb1c --sql
+alembic --name testing downgrade -1
+alembic --name development revision -m 'Test Alembic 3' --autogenerate
+alembic --name testing upgrade eb033f6bdb08
+alembic --name development upgrade eb033f6bdb08
+alembic --name testing upgrade eb033f6bdb08
+alembic --name development downgrade -1
+alembic --name development revision -m 'Alembic Test 4, DB_SCHEMA=media_library' --autogenerate
+alembic --name development upgrade 0fb59d011577
+alembic --name development upgrade 0fb59d011577
+alembic --name demo revision -m 'Alembic Test 5--Demo' --autogenerate
+alembic --name alembic_test revision -m 'Alembic Version Table Test #1' --autogenerate
+alembic --name testing revision -m 'Alembic Version Table Test #1' --autogenerate
+alembic --name testing upgrade 5325d0a78255
+alembic --name testing revision -m 'New env.py Test' --autogenerate
+alembic --name testing revision -m 'New env.py Test #2' --autogenerate
+alembic --name testing revision -m 'New env.py Test #3' --autogenerate
+alembic --name testing revision -m 'New env.py Test #4' --autogenerate
+alembic --name testing revision -m 'New env.py Test #5' --autogenerate
+alembic --name testing revision -m 'New env.py Test #6' --autogenerate
+alembic --name testing revision -m 'New env.py Test #6' --autogenerate
+alembic --name testing revision -m 'New env.py Test #7' --autogenerate
+alembic --name testing revision -m 'New env.py Test #7' --autogenerate
+alembic --name testing upgrade 3dbaf54fbaa6
+alembic --name testing upgrade 3dbaf54fbaa6
+alembic --name testing upgrade 3dbaf54fbaa6
+alembic --name testing downgrade -1
+alembic --name testing upgrade 3dbaf54fbaa6
+alembic --name testing downgrade -1
+alembic --name testing upgrade 3dbaf54fbaa6
+alembic --name testing downgrade -1
+alembic --name development revision -m 'Alembic Schema Test #8' --autogenerate
+alembic --name development upgrade bd76d61f9604
+alembic --name development downgrade -1
+alembic --name demo revision -m 'Alembic Schema Test #9' --autogenerate
+alembic --name demo revision -m 'Alembic Schema Test #10' --autogenerate
+alembic --name demo revision -m 'Alembic Schema Test #10' --autogenerate
+alembic --name demo upgrade db8491d8835a
+alembic --name demo downgrade -1
+grep 'run alembic' ~/.bash_history
+grep 'run alembic' ~/.bash_history | sed 's,^pipenv run ,,'
