@@ -1,0 +1,22 @@
+#+TITLE:	Music History
+#+SUBTITLE:	Log
+#+OPTIONS:	toc:nil num:nil
+#+STARTUP:	indent showeverything
+#+CATEGORY:	Projects
+#+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv
+
+* Monday, June 13, 2022
+:LOGBOOK:
+CLOCK: [2022-06-13 Mon 20:07]--[2022-06-13 Mon 22:11] =>  2:04
+CLOCK: [2022-06-13 Mon 13:33]--[2022-06-13 Mon 18:09] =>  4:36
+CLOCK: [2022-06-13 Mon 08:48]--[2022-06-13 Mon 12:24] =>  3:36
+:END:
+- Alembic Reference: [[https://learningtotest.com/2021/06/17/managing-alembic-migrations-with-a-single-alembic-ini-env-py/][Alembic Configuration]]
+  * I think I need to change ~models.py~ to use ~create_engine~, if I am going to get this to work
+- Another Reference: [[https://elarkk.github.io/blog/multi-schema-sqlalchemy][Multi-schema Postgres database handling through SQLAlchemy]]
+  * This one needs work
+- I was trying to get Alembic to handle multiple databases and schemas, but it isn't working
+  * My current configuration does store the schema with the SQL operations, which is a good thing
+
+
+

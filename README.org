@@ -1,0 +1,11 @@
+#+TITLE:	Music History
+#+SUBTITLE:	README
+#+OPTIONS:	toc:nil num:nil
+#+STARTUP:	indent showeverything
+#+CATEGORY:	Projects
+#+TAGS:		readme python MusicHistory MusicAnalytics smplayer mpv
+
+* Description
+- This is a refactored version of the ~MusicHistory~ project, using ~PyScaffold~
+- This monitors ~smplayer~, creating history files for performing music analytics (ie. Top XXX Lists)
+
