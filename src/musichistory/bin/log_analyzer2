@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# log_analyzer2 - Friday, June 17, 2022
+""" Analyze smplayer log files and generate Top XXX lists """
+__version__ = '0.2.1-dev0'
+
+import os, sys
+import pandas as pd
+from datetime import datetime, timedelta, timezone
+from glob import glob
+from os.path import exists, expanduser, getmtime, join
+from pathlib import Path
+from sqlalchemy import create_engine
+from tabulate import tabulate
+from time import time
+
+BASEPATH = Path(__file__).resolve().parent.parent
+basedir = str(BASEPATH)
+if basedir not in sys.path:
+	sys.path.insert(0, basedir)
+from config import Config
+
+#__MODULE__ = os.path.splitext(os.path.basename(__file__))[0]
+__MODULE__ = Path(__file__).resolve().stem
+
+
+def main():
+	csvpathnames = _data_dir.glob("**/*csv*")
+	# columns = ['timestamp', 'filename']
+	columns = ["epochtime", "playdate", "filename"]
+	df = pd.concat(pd.read_csv(c, delimiter="\t", index_col="epochtime", parse_dates=["playdate"]) for c in csvpathnames)
+	# df['when'] = pd.to_datetime(df['timestamp'], unit='s')
+	# df = df[['timestamp', 'when', 'filename']]
+	# df.set_index('timestamp', inplace=True)
+	print(tabulate(df.sample(3), headers=columns, tablefmt='pretty'))
+	print(df.columns)
+	print(df.size)
+	tablename = "dt_log_analyzer"
+	rows = df.to_sql(tablename, con=engine, if_exists="replace", schema=schema)
+	return
+
+
+def init():
+	print("Run Start: %s" % _run_dt)
+	return
+
+
+def eoj():
+	stop_dt = datetime.now().astimezone().replace(microsecond=0)
+	duration = stop_dt.replace(microsecond=0) - _run_dt.replace(microsecond=0)
+	print("Run Stop : %s  Duration: %s" % (stop_dt, duration))
+	return
+
+
+def do_nothing():
+	pass
+
+
+if __name__ == '__main__':
+	_run_dt = datetime.now().astimezone().replace(microsecond=0)
+	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_fdate = _run_dt.strftime("%Y-%m-%d")
+	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+
+	_data_dir = Config.DATA_DIR
+	engine = create_engine(Config.DATABASE_URL)
+	schema = Config.DB_SCHEMA
+
+	init()
+	main()
+	eoj()
+
+
+

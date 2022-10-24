@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# log_analyzer - Friday, November 23, 2018
+__version__ = '1.15.60-dev0'
+
+import csv
+import mimetypes
+import os
+import re
+import sys
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from operator import itemgetter
+from os.path import exists, expanduser, realpath
+
+
+USE_MIDNIGHT = True
+
+
+def main():
+	# ToDo: change the logic so that timetamps are only assigned once
+	#  (ie. introduce a start_ts variable that is assigned either _run_dt or midnight)
+	if USE_MIDNIGHT:
+		midnight = _run_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+		midnight_ts = midnight.timestamp()
+		midnight_utc = midnight.replace(tzinfo=None)
+		yesterday_ts = (midnight - timedelta(days=1)).timestamp()
+		last_week_ts = (midnight_utc - timedelta(days=7)).timestamp()
+		last_month_ts = (midnight_utc - timedelta(days=30)).timestamp()
+	else:
+		yesterday_ts = (_run_dt - timedelta(days=1)).timestamp()
+		last_week_ts = (_run_dt - timedelta(days=7)).timestamp()
+		last_month_ts = (_run_dt - timedelta(days=30)).timestamp()
+	try:
+		all_dates = load_hist_dates()
+		yesterday_ts = all_dates[-2].timestamp()
+		last_week_ts = all_dates[-8].timestamp()
+		last_month_ts = all_dates[-31].timestamp()
+	except Exception as e:
+		print("Exception:", e, file=sys.stderr)
+
+	all_entries = []
+	daily_entries = []
+	monthly_entries = []
+	weekly_entries = []
+	top_daily = []
+	top_monthly = []
+	top_weekly = []
+	all_locations = []
+	not_found = []
+	new_lines = []
+	skipped = []
+	for start_ts, stop_ts, duration, location in load_history():
+		start_dt = datetime.fromtimestamp(start_ts)
+		entry = (start_ts, location, start_dt.strftime("%Y-%m-%d_%H%M%S"))
+		all_entries.append(entry)
+		all_locations.append(location)
+		if USE_MIDNIGHT:
+			if start_ts > midnight_ts:
+				# Don't process today's activity
+				continue
+		if not exists(location):
+			not_found.append(location)
+			debug_breakpoint()
+			continue
+		if duration < 3.0:
+			debug_breakpoint()
+			continue
+		if duration < 25.0:
+			skipped.append(location)
+			debug_breakpoint()
+			continue
+		# Exclude non-music
+		if '/Music/' not in location:
+			continue
+		# Exclude Christmas music, unless it's December
+		if _run_dt.month != 12:
+			if '/Christmas/' in location:
+				continue
+		new_lines.append("%s\t%s\n" % (location, start_ts))
+		debug_breakpoint()
+		if start_ts > last_month_ts:
+			monthly_entries.append(location)
+			top_monthly.append(location)
+		if start_ts > last_week_ts:
+			weekly_entries.append(entry)
+			top_weekly.append(location)
+		if start_ts > yesterday_ts:
+			daily_entries.append(entry)
+			top_daily.append(location)
+	os.chdir(expanduser('~/Music'))
+	# Save all_entries for research
+	"""filename = 'Research.tsv'
+	with open(filename, 'wt') as w:
+		for ts, loc, dt in all_entries:
+			w.write("%s\t%s\n" % (dt, loc))"""
+	# Daily
+	playlist = []
+	for item, count in Counter(top_daily).most_common(list_size['daily']):
+		playlist.append(item + os.linesep)
+	filename = '.Playlists/Top%d_Daily_%s.m3u' % (list_size['daily'], _fdate)
+	linkname = 'Top%d_Daily.m3u' % list_size['daily']
+	with open(filename, 'wt') as w:
+		w.writelines(playlist)
+	make_symlink(filename, linkname, overwrite=True)
+
+	# Weekly
+	playlist = []
+	for item, count in Counter(top_weekly).most_common(list_size['weekly']):
+		playlist.append(item + os.linesep)
+	filename = '.Playlists/Top%d_Weekly_%s.m3u' % (list_size['weekly'], _fdate)
+	linkname = 'Top%d_Weekly.m3u' % list_size['weekly']
+	with open(filename, 'wt') as w:
+		w.writelines(playlist)
+	make_symlink(filename, linkname, overwrite=True)
+	# Monthly
+	playlist = []
+	for item, count in Counter(top_monthly).most_common(list_size['monthly']):
+		playlist.append(item + os.linesep)
+	filename = '.Playlists/Top%d_Monthly_%s.m3u' % (list_size['monthly'], _fdate)
+	linkname = 'Top%d_Monthly.m3u' % list_size['monthly']
+	with open(filename, 'wt') as w:
+		w.writelines(playlist)
+	make_symlink(filename, linkname, overwrite=True)
+	# All Time
+	playlist = []
+	for item, count in Counter(all_locations).most_common(list_size['all_time']):
+		# print("%3d %s" % (count, item))
+		playlist.append(item + os.linesep)
+	filename = '.Playlists/Top%d_%s.m3u' % (list_size['all_time'], _fdate)
+	linkname = 'Top%d.m3u' % list_size['all_time']
+	with open(filename, 'wt') as w:
+		w.writelines(playlist)
+	make_symlink(filename, linkname, overwrite=True)
+
+	# Least Recently Played
+	all_entries.sort(key=itemgetter(0), reverse=True )   # Reverse Chronological Order
+	all_entries.sort(key=itemgetter(1), reverse=False)   # First Title is most recently-played
+	# Save all_entries for research
+	"""filename = 'Research2.tsv'
+	with open(filename, 'wt') as w:
+		for ts, loc, dt in all_entries:
+			w.write("%s\t%s\n" % (dt, loc))"""
+	data = []
+	dusty = []
+	# ToDo: 0-Jul-29 PAL - Now that we've added a video filter to loading the play history, do we also need it here?
+	ignore_patterns = [
+		"/Aaron1912/",
+		"/Movies/",
+		"/Videos/",
+		"Charleston",
+		"Chattanooga",
+		"Classics",
+		"Flapper",
+		"Glenn.Miller",
+		"Hooked.On",
+		"Kalamazoo",
+	]
+	filter_regex = re.compile("(%s)" % "|".join(ignore_patterns), re.IGNORECASE)
+	for ts, location, dt in all_entries:
+		if location not in dusty:
+			if filter_regex.search(location):
+				continue
+			dusty.append(location)
+			data.append("%s\t%s\n" % (dt, location))
+	print("Unique Titles:", len(dusty))
+	data = data[-25:]
+	dusty = dusty[-25:]
+	filename = '.Playlists/Dusty.tsv'
+	with open(filename, 'wt') as w:
+		w.writelines(data)
+	filename = '.Playlists/Dusty.m3u'
+	with open(filename, 'wt') as w:
+		dusty = map(lambda x: x + os.linesep, dusty)
+		w.writelines(dusty)
+
+	# Most Recently Played
+	# 2019-Dec-14 PAL - Write recent entries to a playlist
+	"""deduped = []  # This method doesn't re-order items, unlike set()
+	for item in all_locations[-150:]:
+		if item not in deduped:
+			deduped.append(item)
+	playlist = [x + '\n' for x in deduped[-100:]]
+	# print("Recent items %d --> %d" % (len(all_locations), len(deduped)))
+	filename = '.Playlists/Recently_Played_%s.m3u' % _fdate
+	linkname = 'Recently_Played.m3u'
+	with open(filename, 'wt') as w:
+		w.writelines(playlist)
+	make_symlink(filename, linkname, overwrite=True)"""
+	if not_found:
+		newfile = LOG_FILE + '.new'
+		oldfile = LOG_FILE + '.old'
+		with open(newfile, 'wt') as w:
+			w.writelines(new_lines)
+		os.renames(LOG_FILE, oldfile)
+		os.renames(newfile, LOG_FILE)
+		debug_breakpoint()
+	# Skipped
+	if skipped:
+		# 2019-Dec-14 PAL - Daily - write skipped items to a playlist
+		deduped = []  # This method doesn't re-order items, unlike set()
+		for item in skipped:
+			if item not in deduped:
+				deduped.append(item)
+		playlist = [x + '\n' for x in deduped]
+		filename = '.Playlists/Recently_Skipped_%s.m3u' % _fdate
+		linkname = 'Recently_Skipped.m3u'
+		with open(filename, 'wt') as w:
+			w.writelines(playlist)
+		make_symlink(filename, linkname, overwrite=True)
+	return
+
+
+def load_hist_dates():
+	all_dates = []
+
+	with open(LOG_FILE, 'rt') as csvfile:
+		sniffer = csv.Sniffer()
+		sample = csvfile.read(2048)
+		# dialect = sniffer.sniff(sample)  # This doesn't work if locations have spaces and commas
+		csvfile.seek(0)
+		reader = csv.reader(csvfile, delimiter='\t')  #, dialect)
+		if sniffer.has_header(sample):
+			next(reader)
+		try:
+			for location, atime in reader:
+				atime = float(atime)
+				mimetype = mimetypes.guess_type(location)[0]
+				if mimetype is None:
+					# has_unwanted_files = True
+					continue
+				elif mimetype.startswith('text'):
+					# has_unwanted_files = True
+					continue
+				dt = datetime.fromtimestamp(atime).replace(hour=0,minute=0,second=0,microsecond=0)
+				if dt not in all_dates:
+					all_dates.append(dt)
+		except Exception as e:
+			print("Exception:", e, file=sys.stderr)
+	return all_dates
+
+
+def load_history():
+	tmpfilename = LOG_FILE + '.tmp'
+	sorter = []
+	has_duplicates = False
+	has_unwanted_files = False
+	with open(LOG_FILE, 'rt') as csvfile:
+		sniffer = csv.Sniffer()
+		sample = csvfile.read(2048)
+		# dialect = sniffer.sniff(sample)  # This doesn't work if locations have spaces and commas
+		csvfile.seek(0)
+		reader = csv.reader(csvfile, delimiter='\t')  #, dialect)
+		if sniffer.has_header(sample):
+			next(reader)
+		filter_regex = re.compile(r'/Videos/|/Movies/')
+		with open(tmpfilename, 'wt') as w:
+			try:
+				for location, atime in reader:
+					if filter_regex.search(location):
+						continue
+					if [ atime, location, ] in sorter:
+						has_duplicates = True
+						continue
+					atime = float(atime)
+					mimetype = mimetypes.guess_type(location)[0]
+					if mimetype is None:
+						has_unwanted_files = True
+						continue
+					elif mimetype.startswith('text'):
+						has_unwanted_files = True
+						continue
+					sorter.append( [ atime, location, ])
+					w.write("%s\t%s\n" % (location, atime))
+			except Exception as e:
+				print("Exception:", e, file=sys.stderr)
+	if has_duplicates or has_unwanted_files:
+		os.renames(tmpfilename, LOG_FILE)
+	else:
+		os.remove(tmpfilename)
+	sorter.sort(key=itemgetter(0))
+	# with open(AUDIT_FILE_TS, 'wt') as ts_auditfile:
+	#	print("Start\tStop\tDuration\tFilename1\tFilename2", file=ts_auditfile, flush=True)
+	# with open(AUDIT_FILE_DT, 'wt') as dt_auditfile:
+	#	print("Start\tStop\tDuration\tFilename\tFilename2", file=dt_auditfile, flush=True)
+	rows = []
+	for i in range(len(sorter[:-1])):
+		s1, s2 = sorter[i], sorter[i+1]
+		start_ts = float(s1[0])
+		# start_dt = datetime.fromtimestamp(start_ts)
+		stop_ts = float(s2[0])
+		# stop_dt = datetime.fromtimestamp(stop_ts)
+		duration = stop_ts - start_ts
+		# fname1 = s1[1]
+		# fname2 = s2[1]
+		"""print("%f\t%f\t%f\t%s\t%s" % (start_ts, stop_ts, duration, fname1, fname2), file=ts_auditfile)
+		print("%s\t%s\t%f\t%s\t%s" % (start_dt, stop_dt, duration, fname1, fname2), file=dt_auditfile)"""
+		row1 = [ start_ts, stop_ts, duration, s1[1], ]
+		rows.append(row1)
+	return rows
+
+
+def load_library(playlist):
+	items = []
+	with open(playlist, 'rt') as r:
+		lines = r.readlines()
+		for line in lines:
+			items.append(line.rstrip())
+	return items
+
+
+def make_symlink(filename, linkname, overwrite=False):
+	if exists(linkname) and overwrite:
+		if realpath(filename) != realpath(linkname):
+			os.unlink(linkname)
+	if not exists(linkname):
+		os.symlink(filename, linkname)
+	return
+
+
+def init():
+	return
+
+
+def eoj():
+	datefilename = LOG_FILE + '.dates'
+	if exists(datefilename):
+		os.remove(datefilename)
+	return
+
+
+def debug_breakpoint():
+	pass
+
+
+if __name__ == '__main__':
+	_run_dt = datetime.now().astimezone().replace(microsecond=0)
+	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_fdate = _run_dt.strftime("%Y-%m-%d")
+	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+
+	AUDIT_FILE_TS = expanduser('~/.local/var/log/Music-Analytics_ts.tsv')
+	AUDIT_FILE_DT = expanduser('~/.local/var/log/Music-Analytics_dt.tsv')
+	LOG_FILE = expanduser('~/.local/var/log/smplayer_history')
+	LIB_FILE = expanduser('~/Music/MusicVideos.m3u')
+
+	list_size = {'daily': 10, 'weekly': 40, 'monthly': 100, 'all_time': 500, }
+
+	main()
+

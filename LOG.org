@@ -5,9 +5,37 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv
 
+* Monday, October 24, 2022
+:LOGBOOK:
+CLOCK: [2022-10-24 Mon 14:36]--[2022-10-24 Mon 16:32] =>  1:56
+CLOCK: [2022-10-24 Mon 04:24]--[2022-10-24 Mon 06:21] =>  1:57
+:END:
+- After binge-watching /St. Elsewhere/ and /The X-Files/, I have actually been listening to music for the last couple of days, so it is time to work on the Top XXX lists
+- I see the database has incorrect timestamps (in the future)
+  * ~log_extractor~ - This is where timestamps and filenames are extracted from the SMPlayer logs and CSV summaries are created; I moved the logic to convert timestamps here, since they are correct
+  * Re-running ~log_extractor~ on the entire dataset (150 days worth)
+- The ~MusicHistory~ folder is 56 GB in size!
+  * Compressed about 150 file with ~xz~ and got it down to 2.1 GB
+- Ready to combine ~log_extractor.py~ and ~log_analyzer.py~
+- Created ~touchdirs2.py~ as a scratch file, as a replacement for ~touchdirs~
+  * It uses ~os.walk~ and is both faster and simpler than I expected
+
+* Friday, June 17, 2022
+:LOGBOOK:
+CLOCK: [2022-06-17 Fri 15:42]--[2022-06-17 Fri 18:23] =>  2:41
+CLOCK: [2022-06-17 Fri 12:20]--[2022-06-17 Fri 12:32] =>  0:12
+CLOCK: [2022-06-17 Fri 06:55]--[2022-06-17 Fri 07:22] =>  0:27
+:END:
+- Moved ~Music-Analytics~ from the old ~MusicHistory~ project to the ~bin~ directory and renamed it to ~log_anaylzer~, to standardize the command names
+  * It doesn't work with the new log files, yet
+  * I'm not sure how to add any of these as commands to the project, so that they will be installed, but that can come later
+- The CSV files have Unix timestamps, but Pandas ~to_datetime()~  function doesn't produce the correct date, so I will try it in the database, instead
+- Created baseline for ~developmentdb.media_library~ 
+
+  
 * Tuesday, June 14, 2022
 :LOGBOOK:
-CLOCK: [2022-06-14 Tue 14:05]
+CLOCK: [2022-06-14 Tue 14:05]--[2022-06-14 Tue 16:23] =>  2:18
 CLOCK: [2022-06-14 Tue 09:34]--[2022-06-14 Tue 11:02] =>  1:28
 :END:
 - After mucking-about with multidb and schemas, it looks like I misunderstood what ~multidb~ is all about
@@ -20,7 +48,10 @@ CLOCK: [2022-06-14 Tue 09:34]--[2022-06-14 Tue 11:02] =>  1:28
 - I haven't created a baseline for the ~developmentdb~ database, yet, but I created a few database and schema combinations that enabled me to configure Alembic to work with the databases and schemas of my choosing, as defined in ~models.py~, which calls ~config.py~, which loads environment variables stored in ~.env~ files
 - ~alembic.ini~ needs to have named sections that correspond to the database/schema combinations in the application, and ~version_locations~ defined for each one
 - See [[./src/musichistory/alembic_history][alembic_history]] for the command history of tests performed
-
+** DONE Next Steps
+*** DONE Create a baseline for the database
+*** DONE Bring commands over from ~MusicHistory_old~
+  
 * Monday, June 13, 2022
 :LOGBOOK:
 CLOCK: [2022-06-13 Mon 20:07]--[2022-06-13 Mon 22:11] =>  2:04
