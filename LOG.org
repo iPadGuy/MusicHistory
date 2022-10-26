@@ -5,6 +5,23 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv
 
+* Wednesday, October 26, 2022
+:LOGBOOK:
+CLOCK: [2022-10-26 Wed 04:12]--[2022-10-26 Wed 04:15] =>  0:03
+:END:
+- ~log_analyzer~ ran overnight, without a hitch; the ~to_sql~ function is using ~append~ now, instead of ~replace~
+
+* Tuesday, October 25, 2022
+:LOGBOOK:
+CLOCK: [2022-10-25 Tue 16:53]--[2022-10-25 Tue 17:16] =>  0:23
+CLOCK: [2022-10-25 Tue 11:38]--[2022-10-25 Tue 12:58] =>  1:20
+CLOCK: [2022-10-25 Tue 04:15]--[2022-10-25 Tue 07:22] =>  3:07
+:END:
+- Moved ~config.py~ from ~src/musichistory~ to ~~/.config/MusicHistory~; this seems to make the ~.env~ file irrelevant, unless I also move it
+- ~log_anaylzer2~ has been merged into ~log_extractor~
+- Imported the old ~smplayer_history~ file (~20220518.csv.xz~)
+- The database now contains all of the music history data
+
 * Monday, October 24, 2022
 :LOGBOOK:
 CLOCK: [2022-10-24 Mon 14:36]--[2022-10-24 Mon 16:32] =>  1:56
@@ -16,9 +33,10 @@ CLOCK: [2022-10-24 Mon 04:24]--[2022-10-24 Mon 06:21] =>  1:57
   * Re-running ~log_extractor~ on the entire dataset (150 days worth)
 - The ~MusicHistory~ folder is 56 GB in size!
   * Compressed about 150 file with ~xz~ and got it down to 2.1 GB
-- Ready to combine ~log_extractor.py~ and ~log_analyzer.py~
+- Ready to combine ~log_extractor2~ and ~log_analyzer~
 - Created ~touchdirs2.py~ as a scratch file, as a replacement for ~touchdirs~
   * It uses ~os.walk~ and is both faster and simpler than I expected
+  * It isn't ready for production-use, yet--I need to code logic for filetypes like MP4
 
 * Friday, June 17, 2022
 :LOGBOOK:

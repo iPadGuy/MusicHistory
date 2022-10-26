@@ -16,7 +16,7 @@ Base = declarative_base(metadata=sa.MetaData(schema=schema))
 
 class PlayInfo(Base):
 	__table__ = sa.Table(
-		"td_playinfo", Base.metadata,
+		"dt_playinfo", Base.metadata,
 		sa.Column("id", sa.BigInteger, sa.Identity(always=True), primary_key=True),
 		sa.Column("timestamp", sa.Float, nullable=False, unique=True),
 		sa.Column("fi_id", sa.BigInteger),

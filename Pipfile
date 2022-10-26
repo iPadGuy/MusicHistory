@@ -14,6 +14,7 @@ psycopg2 = "*"
 
 [dev-packages]
 tabulate = "*"
+black = "*"
 
 [requires]
 python_version = "3.10"
