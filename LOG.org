@@ -3,7 +3,22 @@
 #+OPTIONS:	toc:nil num:nil
 #+STARTUP:	indent showeverything
 #+CATEGORY:	Projects
-#+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv
+#+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
+
+* Tuesday, November 1, 2022
+:LOGBOOK:
+CLOCK: [2022-11-01 Tue 04:27]--[2022-11-01 Tue 12:09] =>  7:42
+:END:
+- Examining whether or not there should be a DATE column in ~dt_log_analyzer~, for use in ~JOIN~ statements
+  * I tested this with ~dt_playinfo_test~ and it works well
+  * I can see this eliminating the need for the CSV files in the ~Summaries~ directory, altogether
+- Renamed ~d_date~ to ~dim_date~, for now
+
+* Friday, October 28, 2022
+:LOGBOOK:
+CLOCK: [2022-10-28 Fri 15:27]--[2022-10-28 Fri 18:29] =>  3:02
+:END:
+- Added date dimension table, ~d_date~
 
 * Wednesday, October 26, 2022
 :LOGBOOK:

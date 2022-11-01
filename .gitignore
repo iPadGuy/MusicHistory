@@ -3,6 +3,8 @@
 *.py[cod]
 *.so
 *.cfg
+*.tar.*
+*.xz
 !.isort.cfg
 !setup.cfg
 *.orig

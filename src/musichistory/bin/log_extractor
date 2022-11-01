@@ -3,7 +3,7 @@
 # log_extractor - Friday, May 27, 2022
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
     and generate Top XXX lists """
-__version__ = "0.3.10-dev4"
+__version__ = "0.3.12-dev5"
 
 import lzma
 import os
@@ -42,10 +42,14 @@ def main():
     run_date_id = _run_dt.strftime("%Y%m%d")
     # if args:
     # 	date_id = args[0]
-    date_ids = []
+    # date_ids = []
+    tablename = "dt_playinfo_test"
+    # tablename = "dt_log_analyzer"
     # Scan for directories in YYYYMMDD format
     date_regex = r"((19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]))"
-    for subdir in list(_data_dir.iterdir())[-1000:]:
+    for subdir in list(_data_dir.iterdir())[-10:]:
+        if len(list(subdir.iterdir())) == 0:
+            continue
         date_id = subdir.name
         if date_id == run_date_id:
             continue
@@ -54,20 +58,15 @@ def main():
             if not summaryfilename.exists():
                 # Only process log files that don't have a matching summary file
                 print(f"Processing: {date_id} . . .")
-                extract_loginfo(subdir, summaryfilename)
-
-    # Extract log data
-    csvpathnames = _data_dir.glob("**/*csv*")
-    columns = ["epochtime", "playdate", "filename"]
-    df = pd.concat(
-        pd.read_csv(c, delimiter="\t", index_col="epochtime", parse_dates=["playdate"])
-        for c in csvpathnames
-    )
-    print(tabulate(df.sample(3), headers=columns, tablefmt="pretty"))
-    print(df.columns)
-    print(df.size)
-    tablename = "dt_log_analyzer"
-    rows = df.to_sql(tablename, con=engine, if_exists="append", schema=schema)
+                df = extract_loginfo(subdir, summaryfilename)
+                epochtimes_list = list(df["epochtime"].values)
+                # See if epochtimes already exist
+                where_clause = "epochtime IN (%s)" % ",".join([str(x) for x in epochtimes_list])
+                sql = f"SELECT epochtime FROM {schema}.{tablename} WHERE {where_clause};"
+                existing_df = pd.read_sql_query(sql, con=engine)
+                rows = df.loc[df["epochtime"] != existing_df["epochtime"]].to_sql(tablename, con=engine, index=False, if_exists="append", schema=schema)
+                print(f"Added {rows} rows to database")
+                do_nothing()
     return
 
 
@@ -88,6 +87,7 @@ def do_nothing():
 
 
 def extract_loginfo(logdir, summaryfilename):
+    df = None
     csvlines = []
     seen_lines = []
     # Extract media & time information from log files
@@ -110,13 +110,13 @@ def extract_loginfo(logdir, summaryfilename):
                         parts = line.split()
                         timepart = parts[0].lstrip("[").rstrip("]")
                         hh, mm, ss, ms = [int(x) for x in timepart.split(":")]
-                        play_dt = datetime(log_year, log_month, log_day, hh, mm, ss, ms)
-                        # play_date = play_dt.date()
+                        play_dt = datetime(log_year, log_month, log_day, hh, mm, ss, ms).astimezone()
+                        play_date = play_dt.date()
                         # iso = play_dt.isoformat(" ")
                         # ts = play_dt.timestamp()
                         filename = " ".join(parts[3:-2]).strip('"')
                         csvlines.append(
-                            (play_dt.timestamp(), play_dt.isoformat(" "), filename)
+                            (play_dt.timestamp(), play_date, play_dt.isoformat(" "), filename)
                         )
                         seen_lines.append(line)
         # Compress file
@@ -131,13 +131,15 @@ def extract_loginfo(logdir, summaryfilename):
         if not summaryfilename.exists():
             print(f"Found {len(csvlines):,d} lines to process")
             summaryfilename.parent.mkdir(exist_ok=True)
-            columns = ["epochtime", "playdate", "filename"]
+            columns = ["epochtime", "playdate", "playdatetime", "filename"]
             df = pd.DataFrame(csvlines, columns=columns)
+            df["playdatetime"] = pd.to_datetime(df["playdatetime"])
+            df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
             # Save to tab-delimited file
             df.to_csv(summaryfilename, "\t", header=columns, index=False)
             os.utime(summaryfilename, times=(last_mtime, last_mtime))
             os.utime(logdir, times=(last_mtime, last_mtime))
-    return
+    return df
 
 
 if __name__ == "__main__":
