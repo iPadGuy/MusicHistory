@@ -18,7 +18,7 @@ class PlayInfo(Base):
 	__table__ = sa.Table(
 		"dt_playinfo", Base.metadata,
 		sa.Column('id', sa.BigInteger(), server_default=sa.Identity(start=100001), nullable=False, primary_key=True),
-		sa.Column("epochtime", sa.Float, nullable=False, index=True),
+		sa.Column("epochtime", sa.Float, nullable=False, unique=True),
 		sa.Column("playdate", sa.Date(), nullable=False, index=True),
 		sa.Column("playdatetime", sa.DateTime(timezone=True), nullable=False, index=True),
 		sa.Column("filename", sa.String(1024), index=True, nullable=False),
@@ -44,7 +44,7 @@ class FileInfo(Base):
 		return f"<FileInfo: {self.id} {self.filename} {self.asof}>"
 
 
-class PlayInfoTest(Base):
+"""class PlayInfoTest(Base):
 	__table__ = sa.Table(
 		"dt_playinfo_test", Base.metadata,
 		sa.Column('id', sa.BigInteger(), server_default=sa.Identity(start=100001), nullable=False, primary_key=True),
@@ -58,4 +58,4 @@ class PlayInfoTest(Base):
 	def __repr__(self):
 		return f"<PlayInfo: {self.id} {self.playdatetime} {self.filename}>"
 
-
+"""

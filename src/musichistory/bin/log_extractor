@@ -3,7 +3,7 @@
 # log_extractor - Friday, May 27, 2022
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
     and generate Top XXX lists """
-__version__ = "0.3.12-dev5"
+__version__ = "0.3.12-dev6"
 
 import lzma
 import os
@@ -43,7 +43,7 @@ def main():
     # if args:
     # 	date_id = args[0]
     # date_ids = []
-    tablename = "dt_playinfo_test"
+    tablename = "dt_playinfo"
     # tablename = "dt_log_analyzer"
     # Scan for directories in YYYYMMDD format
     date_regex = r"((19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]))"
@@ -64,7 +64,9 @@ def main():
                 where_clause = "epochtime IN (%s)" % ",".join([str(x) for x in epochtimes_list])
                 sql = f"SELECT epochtime FROM {schema}.{tablename} WHERE {where_clause};"
                 existing_df = pd.read_sql_query(sql, con=engine)
-                rows = df.loc[df["epochtime"] != existing_df["epochtime"]].to_sql(tablename, con=engine, index=False, if_exists="append", schema=schema)
+                if not existing_df["epochtime"].empty:
+                    df = df.loc[df["epochtime"] != existing_df["epochtime"]]
+                rows = df.to_sql(tablename, con=engine, index=False, if_exists="append", schema=schema)
                 print(f"Added {rows} rows to database")
                 do_nothing()
     return
@@ -135,10 +137,11 @@ def extract_loginfo(logdir, summaryfilename):
             df = pd.DataFrame(csvlines, columns=columns)
             df["playdatetime"] = pd.to_datetime(df["playdatetime"])
             df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
-            # Save to tab-delimited file
-            df.to_csv(summaryfilename, "\t", header=columns, index=False)
-            os.utime(summaryfilename, times=(last_mtime, last_mtime))
-            os.utime(logdir, times=(last_mtime, last_mtime))
+            if Config.SAVE_SUMMARIES:
+                # Save to tab-delimited file
+                df.to_csv(summaryfilename, "\t", header=columns, index=False)
+                os.utime(summaryfilename, times=(last_mtime, last_mtime))
+                os.utime(logdir, times=(last_mtime, last_mtime))
     return df
 
 

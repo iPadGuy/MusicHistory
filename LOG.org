@@ -5,6 +5,16 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Wednesday, November 2, 2022
+:LOGBOOK:
+CLOCK: [2022-11-02 Wed 03:19]--[2022-11-02 Wed 04:54] =>  1:35
+:END:
+- It seems that the midnight run of ~log_analyzer~ failed because I forgot to install it, but 
+  * When I ran it manually, nothing happened
+  * I had to delete the summary file, ~20221101.csv.xz~, in order for it to run
+    + I want to eliminate the need for the CSV files, altogether
+    + I started with adding ~SAVE_SUMMARIES~ to the environment / configuration
+
 * Tuesday, November 1, 2022
 :LOGBOOK:
 CLOCK: [2022-11-01 Tue 04:27]--[2022-11-01 Tue 12:09] =>  7:42
@@ -33,7 +43,7 @@ CLOCK: [2022-10-25 Tue 11:38]--[2022-10-25 Tue 12:58] =>  1:20
 CLOCK: [2022-10-25 Tue 04:15]--[2022-10-25 Tue 07:22] =>  3:07
 :END:
 - Moved ~config.py~ from ~src/musichistory~ to ~~/.config/MusicHistory~; this seems to make the ~.env~ file irrelevant, unless I also move it
-- ~log_anaylzer2~ has been merged into ~log_extractor~
+- ~log_analyzer2~ has been merged into ~log_extractor~
 - Imported the old ~smplayer_history~ file (~20220518.csv.xz~)
 - The database now contains all of the music history data
 
@@ -59,7 +69,7 @@ CLOCK: [2022-06-17 Fri 15:42]--[2022-06-17 Fri 18:23] =>  2:41
 CLOCK: [2022-06-17 Fri 12:20]--[2022-06-17 Fri 12:32] =>  0:12
 CLOCK: [2022-06-17 Fri 06:55]--[2022-06-17 Fri 07:22] =>  0:27
 :END:
-- Moved ~Music-Analytics~ from the old ~MusicHistory~ project to the ~bin~ directory and renamed it to ~log_anaylzer~, to standardize the command names
+- Moved ~Music-Analytics~ from the old ~MusicHistory~ project to the ~bin~ directory and renamed it to ~log_analyzer~, to standardize the command names
   * It doesn't work with the new log files, yet
   * I'm not sure how to add any of these as commands to the project, so that they will be installed, but that can come later
 - The CSV files have Unix timestamps, but Pandas ~to_datetime()~  function doesn't produce the correct date, so I will try it in the database, instead
