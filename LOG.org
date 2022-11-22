@@ -5,8 +5,27 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Tuesday, November 22, 2022
+:LOGBOOK:
+CLOCK: [2022-11-24 Thu 05:00]
+:END:
+
+* Monday, November 21, 2022
+:LOGBOOK:
+CLOCK: [2022-11-21 Mon 07:00]--[2022-11-21 Mon 12:32] =>  5:32
+:END:
+- Working on Top XX lists
+- I created a bunch of lists, but it looks like I need to correct the SQL for Daily lists
+
+* Sunday, November 20, 2022
+:LOGBOOK:
+CLOCK: [2022-11-20 Sun 12:45]--[2022-11-20 Sun 13:10] =>  0:25
+:END:
+- Updated SQL for generating TOP XX lists using DBeaver
+
 * Wednesday, November 2, 2022
 :LOGBOOK:
+CLOCK: [2022-11-02 Wed 07:54]--[2022-11-02 Wed 09:44] =>  1:50
 CLOCK: [2022-11-02 Wed 03:19]--[2022-11-02 Wed 04:54] =>  1:35
 :END:
 - It seems that the midnight run of ~log_analyzer~ failed because I forgot to install it, but 
@@ -14,6 +33,8 @@ CLOCK: [2022-11-02 Wed 03:19]--[2022-11-02 Wed 04:54] =>  1:35
   * I had to delete the summary file, ~20221101.csv.xz~, in order for it to run
     + I want to eliminate the need for the CSV files, altogether
     + I started with adding ~SAVE_SUMMARIES~ to the environment / configuration
+- After creating a date dimension table, it seems appropriate to create a file dimension
+  * A folder dimension seems to be part of this, and I have already worked on these things with FileInfo and FolderInfo classes in Python
 
 * Tuesday, November 1, 2022
 :LOGBOOK:

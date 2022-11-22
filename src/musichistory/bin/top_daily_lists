@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# top_daily_lists - Monday, November 21, 2022
+""" I prototyped this in a SQL script, but ran into issues with how_many_lists """
+__version__ = "0.1.7"
+
+import os, sys
+import sqlalchemy as sa
+from datetime import datetime, timedelta, timezone
+from glob import glob
+from os.path import exists, expanduser, join
+from pathlib import Path
+from sqlalchemy import create_engine
+from xdg import XDG_CONFIG_HOME, XDG_DATA_HOME
+
+appname = "MusicHistory"
+config_dir = XDG_CONFIG_HOME
+if not config_dir:
+    config_dir = os.path.expanduser("~/.config")
+if appname:
+    config_dir = os.path.join(config_dir, appname)
+try:
+    sys.path.insert(0, config_dir)
+except ModuleNotFoundError:
+    raise ModuleNotFoundError("config.py")
+from config import Config  # noqa
+
+__MODULE__ = Path(__file__).resolve().stem
+
+
+def main():
+    list_size = 10
+    cols_list = [
+        "ROW_NUMBER() OVER(ORDER BY count(*) DESC) rownum",
+        "count(*) playcount",
+        "dpt.filename",
+    ]
+    cols = ','.join(cols_list)
+
+    frm_list = ["dt_playinfo dpt",
+                "INNER JOIN dim_date dd",
+                "ON dpt.playdate = dd.date_actual",
+               ]
+    frm = " ".join(frm_list)
+    ands = ["dd.date_actual = :list_date",
+            "dpt.filename LIKE :file_prefix",
+            ]
+    file_prefix = "/home/patrick/Music/%"
+    whr = " AND ".join(ands)
+    grp = "dpt.filename HAVING count(*) > 1"
+    ordr = "playcount DESC"
+
+    how_many_lists = 10
+    start_date = datetime.date(_run_dt - timedelta(days=how_many_lists))
+    list_dates = [start_date + timedelta(days=n) for n in range(how_many_lists)]
+    for i, list_date in enumerate(list_dates):
+        playlist = []
+        playlist_filename = None
+        playlist_mtime = None
+        params = {"list_date": list_date, "file_prefix": file_prefix}
+        sql = f"SELECT {cols}\nFROM {frm}\nWHERE {whr}\nGROUP BY {grp}\nORDER BY {ordr}\nLIMIT {list_size};"
+        with engine.connect() as conn:
+            result = conn.execute(sa.text(sql), params)
+            print(f"{i + 1:2d}) {list_date}: Row count: {result.rowcount}")
+            # if there aren't ten items in the list, skip it
+            if result.rowcount < 10:
+                continue
+            playlist_filename = _playlist_dir / "daily" / f"Top{list_size}_Daily_{list_date.strftime('%Y-%m-%d')}.m3u"
+            playlist_mtime = (datetime.fromisoformat(list_date.isoformat())
+                              + timedelta(hours=23, minutes=59, seconds=59, milliseconds=999)
+                              ).timestamp()
+            for row_number, playcount, filename in result.fetchall():
+                print(f"{row_number:3d}) {playcount} {filename}")
+                playlist.append(filename)
+        if not exists(playlist_filename):
+            with open(playlist_filename, "w") as pfile:
+                pfile.writelines([x+"\n" for x in playlist])
+            os.utime(playlist_filename, (playlist_mtime, playlist_mtime))
+    return
+
+
+def init():
+    print("Run Start: %s" % _run_dt)
+    return
+
+
+def eoj():
+    stop_dt = datetime.now().astimezone().replace(microsecond=0)
+    duration = stop_dt.replace(microsecond=0) - _run_dt.replace(microsecond=0)
+    print("Run Stop : %s  Duration: %s" % (stop_dt, duration))
+    return
+
+
+def do_nothing():
+    pass
+
+
+if __name__ == '__main__':
+    _run_dt = datetime.now().astimezone().replace(microsecond=0)
+    _run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    _fdate = _run_dt.strftime("%Y-%m-%d")
+    _fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+
+    _data_dir = Config.DATA_DIR
+    _music_dir = Config.MUSIC_DIR
+    _playlist_dir = Config.PLAYLIST_DIR
+    engine = create_engine(Config.DATABASE_URL)
+    schema = Config.DB_SCHEMA
+
+    @sa.event.listens_for(engine, "connect", insert=True)
+    def set_search_path(dbapi_connection, connection_record):
+        sql = f"SET SESSION search_path TO {schema},public;"
+        existing_autocommit = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
+        cursor = dbapi_connection.cursor()
+        cursor.execute(sql)
+        cursor.close()
+        dbapi_connection.autocommit = existing_autocommit
+
+    init()
+    main()
+    eoj()
