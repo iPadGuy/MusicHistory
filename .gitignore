@@ -466,5 +466,7 @@ compile_commands.json
 # End of https://www.toptal.com/developers/gitignore/api/python,emacs,jetbrains,visualstudiocode,qt
 
 # Symlinks
-/data_dir
 /config_dir
+/data_dir
+/log_dir
+/Playlists

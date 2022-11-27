@@ -3,12 +3,12 @@
  * Ref: https://duffn.github.io/postgresql-date-dimension/
  */
 
-SET search_path TO media_library,public;
+-- SET search_path TO media_library,public;
 
 
--- DROP TABLE IF EXISTS d_date;
+DROP TABLE IF EXISTS d_date_new;
 
-CREATE TABLE IF NOT EXISTS d_date (
+CREATE TABLE IF NOT EXISTS d_date_new (
   date_dim_id              INT NOT NULL PRIMARY KEY,
   date_actual              DATE NOT NULL,
   epoch                    BIGINT NOT NULL,
@@ -46,14 +46,14 @@ CREATE TABLE IF NOT EXISTS d_date (
   weekend_indr             BOOLEAN NOT NULL
 );
 
--- ALTER TABLE public.d_date ADD CONSTRAINT d_date_date_dim_id_pk PRIMARY KEY (date_dim_id);
+-- ALTER TABLE public.d_date_new ADD CONSTRAINT d_date_new_date_dim_id_pk PRIMARY KEY (date_dim_id);
 
-CREATE INDEX d_date_actual_idx
-  ON d_date(date_actual);
+CREATE INDEX d_date_new_actual_idx
+  ON d_date_new(date_actual);
 
 COMMIT;
 
-INSERT INTO d_date
+INSERT INTO d_date_new
 SELECT TO_CHAR(datum, 'yyyymmdd')::INT AS date_dim_id,
        datum AS date_actual,
        EXTRACT(EPOCH FROM datum) AS epoch,
@@ -104,4 +104,4 @@ ORDER BY 1;
 
 COMMIT;
 
-SELECT * FROM d_date WHERE date_actual BETWEEN '2022-10-21' AND '2022-10-25';
+SELECT * FROM d_date_new WHERE date_actual BETWEEN '2022-10-21' AND '2022-10-25';

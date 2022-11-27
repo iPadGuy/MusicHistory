@@ -7,10 +7,13 @@ name = "pypi"
 environs = "*"
 pandas = "*"
 xdg = "*"
-musichistory = {editable = true, path = "."}
 sqlalchemy = "*"
 alembic = "*"
 psycopg2 = "*"
+click = "*"
+oyaml = "*"
+coloredlogs = "*"
+musichistory = {editable = true, path = "."}
 
 [dev-packages]
 tabulate = "*"

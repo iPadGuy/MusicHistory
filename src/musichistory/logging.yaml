@@ -1,0 +1,33 @@
+# logging.yaml - Thursday, November 24, 2022
+
+version: 1
+
+formatters:
+  default:
+    datefmt: "%Y-%m-%d %H:%M:%S%z"
+  simple:
+    format:  "%(name)-12s: %(levelname)-8s %(message)s"
+  extended:
+    format:  "%(asctime)s %(name)-12s %(levelname)-8s: %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S%z"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+
+  file_handler:
+    class: logging.FileHandler
+    level: DEBUG
+    filename: /home/patrick/.local/var/log/MusicHistory.log
+    formatter: extended
+
+loggers:
+  dev:
+    handlers: [console, file_handler]
+  test:
+    handlers: [file_handler]
+root:
+  handlers: [console,file_handler]
+  propagate: true
