@@ -5,9 +5,170 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Wednesday, December 7, 2022
+:LOGBOOK:
+CLOCK: [2022-12-07 Wed 04:00]
+:END:
+** SOLVED: Can't delete last uncompressed log file (~log_extractor~)
+*** os.scandir() succeeds where Path() objects fail
+- Add this to the list of bugs in ~pathlib.Path~
+  * ~Path().glob()~ returns inconsistent results (not all items have full pathnames)
+  * ~os.remove()~ can't delete the last item in a ~Path().glob()~ collection
+** Consolidated / Merged Log Files
+*** ~data_dir/MusicHistory/20221206~
+- ~merged_20221206.log.xz~ was created when I tested ~log_extractor~ with ~os.scandir()~, above
+- The merged log file is 1.1 MB in size, versus 4.6 MB for the compressed log files
+- My method has a much lower load than ~difflib~
+* Tuesday, December 6, 2022
+:LOGBOOK:
+CLOCK: [2022-12-06 Tue 16:00]--[2022-12-06 Tue 18:00] =>  2:00
+CLOCK: [2022-12-06 Tue 07:45]--[2022-12-06 Tue 12:15] =>  4:30
+:END:
+** Consolidating Log Summary Files
+*** ~difflib~
+- This is easier than what I was doing, but it is CPU-intensive
+- This is more suited to files that are edited, which log files are not
+*** Custom File Consolidation
+- Using ~set.intersection()~ and ~set.difference()~ methods didn't work--not even close
+- Since log files aren't edited, the only requirement is extracting only new lines from each log file
+- ~find_new_lines()~ - New function to iterate through log files and compare one file to the next, in chronological order, extract the new lines, and write them to a single file
+* Monday, December 5, 2022
+:LOGBOOK:
+CLOCK: [2022-12-05 Mon 15:00]--[2022-12-05 Mon 18:00] =>  3:00
+CLOCK: [2022-12-05 Mon 07:45]--[2022-12-05 Mon 11:45] =>  4:00
+CLOCK: [2022-12-05 Mon 04:45]--[2022-12-05 Mon 07:15] =>  2:30
+CLOCK: [2022-12-05 Mon 04:00]--[2022-12-05 Mon 04:30] =>  0:30
+:END:
+** Missing Playlist Extension on Symlinks (ie. ~Top40_2022-W48~ should be ~Top40_2022-W48.m3u~)
+*** ~build_top_lists~
+- I fixed the cause of this, but ~Top40_2022-W48~ was the number on item is yesterday's Top 10 playlist, with 86 plays--SMPlayer evidently tried to play this when I loaded the list, yesterday
+- The database confirmed my suspicion that none of the play times (~play_secs~) exceeded three seconds, so I incorporated this into the logic for building Top XX lists, rather than deleting the entries
+- 
+
+* Sunday, December 4, 2022
+:LOGBOOK:
+CLOCK: [2022-12-04 Sun 15:00]--[2022-12-04 Sun 18:00] =>  3:00
+CLOCK: [2022-12-04 Sun 10:00]--[2022-12-04 Sun 12:30] =>  2:30
+CLOCK: [2022-12-04 Sun 08:30]--[2022-12-04 Sun 09:00] =>  0:30
+CLOCK: [2022-12-04 Sun 04:10]--[2022-12-04 Sun 07:30] =>  3:20
+:END:
+** Log Summary Files
+*** ~log_extractor~
+- It looks like I forgot to replace ~Summaries~ with the ~date_id~ for the log files, but everything ran successfully
+** Extracting Play Start/Stop/Pause Times
+*** Current Method
+- Everything is calculated based on ~Core::startMplayer: file:~ entries
+* Saturday, December 3, 2022
+:LOGBOOK:
+CLOCK: [2022-12-03 Sat 16:00]--[2022-12-03 Sat 16:50] =>  0:50
+CLOCK: [2022-12-03 Sat 04:00]--[2022-12-03 Sat 05:30] =>  1:30
+:END:
+** Archiving Log Files
+*** Testing monthly compression vs daily
+1. Copied May log files to ~data_dir/2022/05~
+2. Decompressed and deleted ~.log.xz~ files
+3. Created tarball ~smplayer_2022-05.txz~
+4. Size of ~.log.xz~ files (*80 MB*) vs. tarball (*2.1 MB*)
+5. Created tarball of ~.log.xz~ files, and it was *1.4 MB*--better than the first tarball
+6. I contemplated changing the directory structure of how the log files are stored, in order to accommodate ~shutil.make_archive~, but after a bit of tinkering, it is more work than I care to undertake
+   * If I automate monthly compression, I will probably opt for a temporary folder, but it won't be an issue until some time next year
+7. ~log_extractor~ - Log Summary Files
+   * Log summary files have been stored in a separate directory, ~Summaries~
+   * They will now be stored in the same directory as the log files
+*** Conclusion
+Monthly tarballs of daily compressed log files appear to produce better results than tarballs of daily uncompressed log files
+* Friday, December 2, 2022
+:LOGBOOK:
+CLOCK: [2022-12-02 Fri 16:00]--[2022-12-02 Fri 17:15] =>  1:15
+CLOCK: [2022-12-02 Fri 05:00]--[2022-12-02 Fri 06:30] =>  1:30
+:END:
+** ~log_extractor~
+*** ~play_secs~ and ~play_time~ for last row being processed
+- Since there isn't a subsequent entry for calculating play time / duration, special handling is required
+- Pandas dates (~Timestamps~) don't have the functionality required, but ~datetime~ does; this requires converting Pandas dates to Python dates
+- I have opted to use midnight of the date being processed as the "next" timestamp [[https://w3resource.com/python-exercises/date-time-exercise/python-date-time-exercise-8.php][Helpful article]]
+*** Old Log Files Remain After Being Compressed
+- How did I miss this?
+- After deleting them, directory size went from 12 GB down to 2.6 GB
+
+* Thursday, December 1, 2022
+:LOGBOOK:
+CLOCK: [2022-12-01 Thu 17:00]--[2022-12-01 Thu 18:15] =>  1:15
+CLOCK: [2022-12-01 Thu 08:30]--[2022-12-01 Thu 09:15] =>  0:45
+CLOCK: [2022-12-01 Thu 06:00]--[2022-12-01 Thu 07:30] =>  1:30
+CLOCK: [2022-12-01 Thu 00:30]--[2022-12-01 Thu 01:53] =>  1:23
+:END:
+** ~build_top_lists~ (fewer items than list size)
+- Updated logic to create playlists if rowcount is only missing two items (ie. a Top 10 list can have eight or nine items)
+** ~log_extractor~ failed (cron job)
+- ~play_time~ is calculated for each new entry, but the last entry can't be calculated because there isn't a subsequent entry with a ~play_date~, resulting in a database error
+- I fixed it, for now
+
+* Wednesday, November 30, 2022
+:LOGBOOK:
+CLOCK: [2022-11-30 Wed 04:00]--[2022-11-30 Wed 04:15] =>  0:15
+:END:
+** ~log_analyzer~
+- Ran last night, but with the old version in ~~/bin~, so it still calculated the wrong play times (my fault)
+- Installed the latest version
+** File MetaData
+- [[https://askubuntu.com/a/899434/280037][How to update metadata on MP4 files]]
+
+* Tuesday, November 29, 2022
+:LOGBOOK:
+CLOCK: [2022-11-29 Tue 19:30]--[2022-11-29 Tue 19:55] =>  0:25
+CLOCK: [2022-11-29 Tue 16:45]--[2022-11-29 Tue 17:20] =>  0:35
+CLOCK: [2022-11-29 Tue 11:35]--[2022-11-29 Tue 12:35] =>  1:00
+CLOCK: [2022-11-29 Tue 04:00]--[2022-11-29 Tue 07:30] =>  3:30
+CLOCK: [2022-11-29 Tue 09:15]--[2022-11-29 Tue 11:15] =>  2:00
+:END:
+** Music Analytics
+*** Duration of Play Time
+- I mostly want to be able to detect songs that get skipped, so they can be excluded from the counts for Top XX Lists
+- I have been able to do this with SQL and Pandas
+** Python
+*** ~build_top_lists~
+- The ~cron~ job produced zero results, which is incorrect because I was listening to my Top 40 lists, yesterday
+- the ~log_extractor~ seems to be cause
+- Re-ran the program after re-running ~log_extractor~ and it worked, as expected
+*** ~log_extractor~
+**** Analysis of Crash
+- The ~cron~ job crashed, last night
+- The error messages complain about a primary key violation
+- This is due to the fact that I modified the ~dt_playinfo~ table and copied data back, including the ~id~ column, which messed-up the ~IDENTITY~ constraint
+- Re-ran the program after fixing the database and it worked, as expected
+**** Modifications (version 0.4.13-dev0)
+- Replaced CSV loader logic so that it uses the database and will process existing summary files
+- https://towardsdatascience.com/all-the-pandas-shift-you-should-know-for-data-analysis-791c1692b5e
+** Database
+1. Using ~alembic~, I downgraded/upgraded the initial build to clear whatever was stored for the ~IDENTITY~ column
+2. ~dt_playinfo_backup~ - Restored ~dt_playinfo~ and ~dt_playhistory~ *without* the ~id~ columns, thus letting PostgreSQL to handle generating the ~IDENTITY~ column (~id~) values
+
+* Monday, November 28, 2022
+:LOGBOOK:
+CLOCK: [2022-11-28 Mon 14:00]--[2022-11-28 Mon 14:30] =>  0:30
+CLOCK: [2022-11-28 Mon 08:30]--[2022-11-28 Mon 10:00] =>  1:30
+CLOCK: [2022-11-28 Mon 05:25]--[2022-11-28 Mon 06:55] =>  1:30
+CLOCK: [2022-11-28 Mon 04:00]--[2022-11-28 Mon 05:00] =>  1:00
+:END:
+** ~build_top_lists~
+- It ran as a ~cron~ job last night, but didn't produce a playlist--I was expecting a daily playlist
+  * The log indicates that I only listened to two songs more than once, yesterday
+  * I mostly listened to the ~Random.m3u~ playlist
+** ~click~ module
+- Changing the ~main()~ call to ~main(standalone=False)~ keeps the program running
+- ~eoj()~ is running, again
+** Database
+- I [[https://stackoverflow.com/a/71041431/2719754][found a way]] to add durations to ~dt_playinfo~, but it is taking a long time to run
+  * It finally finished, after nearly half an hour
+  * I set the limit on my view to 10,000 rows, but the database says it updated 115,204 rows (the entire table)
+  * It looks like running ~VACUUM FULL~ is what made the difference
+  * The ~UPDATE~ didn't work--the ~play_secs~ and ~play_time~ columns have all the same values
+- I also figured-out how to do it with Pandas in Python, but I haven't tried to update the database with it
+
 * Sunday, November 27, 2022
 :LOGBOOK:
-CLOCK: [2022-11-27 Sun 17:20]
+CLOCK: [2022-11-27 Sun 17:20]--[2022-11-27 Sun 18:23] =>  1:03
 CLOCK: [2022-11-27 Sun 15:45]--[2022-11-27 Sun 17:00] =>  1:15
 CLOCK: [2022-11-27 Sun 05:00]--[2022-11-27 Sun 12:30] =>  7:30
 :END:
@@ -149,7 +310,6 @@ CLOCK: [2022-06-17 Fri 06:55]--[2022-06-17 Fri 07:22] =>  0:27
 - The CSV files have Unix timestamps, but Pandas ~to_datetime()~  function doesn't produce the correct date, so I will try it in the database, instead
 - Created baseline for ~developmentdb.media_library~ 
 
-  
 * Tuesday, June 14, 2022
 :LOGBOOK:
 CLOCK: [2022-06-14 Tue 14:05]--[2022-06-14 Tue 16:23] =>  2:18
