@@ -3,9 +3,9 @@
 # log_extractor - Friday, May 27, 2022
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.5.18-dev0"
+__version__ = "0.5.19-dev0"
 
-import builtins, lzma, os, re, shutil, sys
+import builtins, lzma, os, re, shutil, sys, tarfile
 from datetime import datetime, timedelta, timezone
 from os.path import basename, dirname, getmtime, join
 from pathlib import Path
@@ -54,11 +54,13 @@ def main():
 				continue
 			logfiles = sorted(logfiles, key=getmtime)
 			last_mtime = getmtime(logfiles[-1])
-			shutil.copy(logfiles[0], merged_filename)
+			# Create merged file from the first uncompressed log file
+			with open(logfiles[0], "rb") as fin, lzma.open(merged_filename, "wb") as fout:
+				# Reads the file by chunks to avoid exhausting memory
+				shutil.copyfileobj(fin, fout)
 			total_count = 0
 			for i in range(0, len(logfiles) - 1):
 				j = i + 1
-				print(f"{logfiles[i].name} vs {logfiles[j].name}")
 				count = (find_new_lines(logfiles[i].path, logfiles[j].path, merged_filename))
 				total_count += count
 				do_nothing()
@@ -70,11 +72,12 @@ def main():
 			##### 2022-12-06 PAL - Merge Log Files - END
 
 			summaryfilename = logdir / f"summary_{date_id}.csv.xz"
+			tarfilename = logdir / f"processed_logs_{date_id}.txz"
 
 			if not summaryfilename.exists():
 				# Only process log files that don't have a matching summary file
 				print(f"Processing: {process_date} . . .")
-				df = extract_loginfo(logdir, summaryfilename)
+				df = extract_loginfo(logdir, summaryfilename, tarfilename)
 			else:
 				print(f"Loading: '{summaryfilename}'")
 				df = pd.read_csv(summaryfilename, sep="\t", parse_dates=["playdatetime"])
@@ -121,45 +124,6 @@ def main():
 	return
 
 
-def main_old():
-	"""
-	Find log directories with new data and extract timestamps & filenames
-	To reprocess a date in the last 10 days, simply remove it's Summary file
-	"""
-	# Date ID for today's data, to be ignored until tomorrow
-	run_date_id = _run_dt.strftime("%Y%m%d")
-	# if args:
-	# 	date_id = args[0]
-	# date_ids = []
-	# tablename = "dt_playinfo"
-	# tablename = "dt_log_analyzer"
-	# Scan for directories in YYYYMMDD format
-	date_regex = r"((19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]))"
-	for subdir in list(_data_dir.iterdir())[-10:]:
-		if len(list(subdir.iterdir())) == 0:
-			continue
-		date_id = subdir.name
-		if date_id == run_date_id:
-			continue
-		if re.match(date_regex, date_id):
-			summaryfilename = _data_dir / "Summaries" / f"{date_id}.csv.xz"
-			if not summaryfilename.exists():
-				# Only process log files that don't have a matching summary file
-				print(f"Processing: {date_id} . . .")
-				df = extract_loginfo(subdir, summaryfilename)
-				epochtimes_list = list(df["epochtime"].values)
-				# See if epochtimes already exist
-				where_clause = "epochtime IN (%s)" % ",".join([str(x) for x in epochtimes_list])
-				sql = f"SELECT epochtime FROM {schema}.{tablename} WHERE {where_clause};"
-				existing_df = pd.read_sql_query(sql, con=engine)
-				if not existing_df["epochtime"].empty:
-					df = df.loc[df["epochtime"] != existing_df["epochtime"]]
-				rows = df.to_sql(tablename, con=engine, index=False, if_exists="append", schema=schema)
-				print(f"Added {rows} rows to database")
-				do_nothing()
-	return
-
-
 def init():
 	print(f"Run Start: {__MODULE__} v{__version__} {_run_dt}")
 	return
@@ -176,7 +140,7 @@ def do_nothing():
 	pass
 
 
-def extract_loginfo(logdir: str, summaryfilename: str) -> pd.DataFrame:
+def extract_loginfo(logdir: str, summaryfilename: str, tarfilename: str) -> pd.DataFrame:
 	df = None
 	csvlines = []
 	seen_lines = []
@@ -191,43 +155,54 @@ def extract_loginfo(logdir: str, summaryfilename: str) -> pd.DataFrame:
 	                 and x.name.endswith(".log")]
 	# log_filenames = logdir.glob("**/*.log")
 	log_filenames = sorted(log_filenames, key=getmtime)
-	for log_filename in log_filenames:
-		date_id = basename(dirname(log_filename.path))
-		# log_dirname = log_filename.parent.name
-		log_year = int(date_id[0:4])
-		log_month = int(date_id[4:6])
-		log_day = int(date_id[6:8])
-		mtime = log_filename.stat().st_mtime
-		if mtime > last_mtime:
-			last_mtime = mtime
-		with open(log_filename) as logfile:
-			for line in [x.rstrip() for x in logfile.readlines()]:
-				if re.search(log_regex, line):
-					if line not in seen_lines:
-						parts = line.split()
-						timepart = parts[0].lstrip("[").rstrip("]")
-						hh, mm, ss, ms = [int(x) for x in timepart.split(":")]
-						play_dt = datetime(log_year, log_month, log_day, hh, mm, ss, ms).astimezone()
-						play_date = play_dt.date()
-						# iso = play_dt.isoformat(" ")
-						# ts = play_dt.timestamp()
-						filename = " ".join(parts[3:-2]).strip('"')
-						csvlines.append(
-							(play_dt.timestamp(), play_date, play_dt.isoformat(" "), filename)
-						)
-						seen_lines.append(line)
-		# Compress log file
-		lzfilename = f"{log_filename}.xz"
-		with open(log_filename, "rb") as fin, lzma.open(lzfilename, "wb") as fout:
-			# Reads the file by chunks to avoid exhausting memory
-			shutil.copyfileobj(fin, fout)
-		sleep(0.1)
-		# Set modification time to that of the last log file
-		mtime = os.path.getmtime(log_filename)
-		os.utime(lzfilename, (mtime, mtime))
-		# Delete original log file
-		os.remove(log_filename)
+	last_filename = log_filenames[-1]
+	last_mtime = getmtime(last_filename)
+	with tarfile.open(tarfilename, "w:xz") as tar:
+		for log_filename in log_filenames:
+			date_id = basename(dirname(log_filename.path))
+			# log_dirname = log_filename.parent.name
+			log_year = int(date_id[0:4])
+			log_month = int(date_id[4:6])
+			log_day = int(date_id[6:8])
+			# mtime = log_filename.stat().st_mtime
+			# if mtime > last_mtime:
+			#	last_mtime = mtime
+			with open(log_filename) as logfile:
+				for line in [x.rstrip() for x in logfile.readlines()]:
+					if re.search(log_regex, line):
+						if line not in seen_lines:
+							parts = line.split()
+							timepart = parts[0].lstrip("[").rstrip("]")
+							hh, mm, ss, ms = [int(x) for x in timepart.split(":")]
+							play_dt = datetime(log_year, log_month, log_day, hh, mm, ss, ms).astimezone()
+							play_date = play_dt.date()
+							# iso = play_dt.isoformat(" ")
+							# ts = play_dt.timestamp()
+							filename = " ".join(parts[3:-2]).strip('"')
+							csvlines.append(
+								(play_dt.timestamp(), play_date, play_dt.isoformat(" "), filename)
+							)
+							seen_lines.append(line)
+			# Compress log file
+			# lzfilename = f"{log_filename}.xz"
+			# with open(log_filename, "rb") as fin, lzma.open(lzfilename, "wb") as fout:
+				# Reads the file by chunks to avoid exhausting memory
+			#	shutil.copyfileobj(fin, fout)
+			# sleep(0.1)
+			# Set modification time to that of the last log file
+			# mtime = os.path.getmtime(log_filename)
+			# os.utime(lzfilename, (mtime, mtime))
+			# Add log file to archive
+			tar.add(log_filename)
+			sleep(0.1)
+			# Delete original log file
+			os.remove(log_filename)
 	# 2022-12-07 PAL - Switching from glob() to scandir() - END
+	# 2022-12-09 PAL - The last file still isn't being deleted . . .
+	sleep(3)
+	os.utime(tarfilename, times=(last_mtime, last_mtime))
+	# if os.path.exists(last_filename):
+	#	os.remove(last_filename)
 
 	# Process rows from CSV log files
 	if csvlines:
@@ -292,11 +267,11 @@ def find_new_lines(older_filename: str, newer_filename: str, merged_filename: st
 			do_nothing()
 		if new_lines:
 			if merged_filename.endswith(".xz"):
-				open = lzma.open
+				open3 = lzma.open
 			else:
-				open = builtins.open
-			with open(merged_filename, "at") as tfp:
-				tfp.writelines(new_lines)
+				open3 = builtins.open
+			with open3(merged_filename, "at") as fout:
+				fout.writelines(new_lines)
 		do_nothing()
 	return len(new_lines)
 
