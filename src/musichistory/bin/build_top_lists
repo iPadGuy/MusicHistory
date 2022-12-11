@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 # build_top_lists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.5.20-dev5"
-##!/home/patrick/.local/share/virtualenvs/MusicHistory-nP00uPHO/bin/python
+__version__ = "0.6.22-dev0"
 
 import click, coloredlogs, logging, os, sys
 import sqlalchemy as sa
@@ -101,7 +100,10 @@ def build_query(db_column: str) -> str:
 def build_lists(list_date: datetime.date) -> None:
     fn_logger = logging.getLogger(__MODULE__ + ".build_lists")
     playlists = which_lists(list_date)
+    os.chdir(_music_dir)
+    playlist_dir = Path(".Playlists")
     if playlists:
+        # Set parameter for database query
         file_prefix = expanduser("~/Music/%")
         for list_type in playlists.keys():
             fn_logger.info(f"{list_date}: {list_type:7s} {playlists[list_type]}")
@@ -124,8 +126,8 @@ def build_lists(list_date: datetime.date) -> None:
                 list_name = list_date.strftime("%Y")
             else:
                 raise ValueError(f"Uknown list type: {list_type}")
-            playlist_filename = _playlist_dir / list_type / f"Top{list_size}_{list_name}.m3u"
-            linkname = _music_dir / playlist_filename.name
+            playlist_filename = playlist_dir / list_type / f"Top{list_size}_{list_name}.m3u"
+            linkname = playlist_filename.name
             fn_logger.info(f"Generating '{playlist_filename.name}'")
             params = {f"list_date": list_date, "list_size": list_size, "file_prefix": file_prefix}
             # fn_logger.info(f"Parameters: {params}")
@@ -169,35 +171,41 @@ def build_lists(list_date: datetime.date) -> None:
 
 def make_aliases():
     fn_logger = logging.getLogger(__MODULE__ + ".make_aliases")
+    # Change to Music directory in order to have relative symlinks to playlists
     os.chdir(_music_dir)
+    playlist_dir = Path(".Playlists")
     for list_type in _list_types:
-        list_dir = join(_playlist_dir.stem, list_type)
+        list_dir = playlist_dir / list_type
         # print(f"List Dir: {list_dir}")
-        matches = [x for x in glob(join(list_dir, "*.m3u"), recursive=False) if "YTD" not in x]
-        current_list = max(matches, key=getmtime)
-        mtime = getmtime(current_list)
-        listname = basename(current_list)
-        # print(f"- Current List: {listname}")
-        prefix = listname.split("_")[0]
-        linkname = _music_dir / f"{prefix}_{list_type.capitalize()}.m3u"
-        # print(f"- Link Name: {linkname}")
-        if lexists(linkname):
-            if mtime > getmtime(linkname):
-                fn_logger.info(f"Removing symlink: {linkname}")
-                os.unlink(linkname)
-            else:
-                continue
-        make_symlink(current_list, linkname, overwrite=False, times=(mtime, mtime))
+        playlists = [x for x in glob(join(list_dir, "*.m3u"), recursive=False) if "YTD" not in x]
+        playlists = sorted(playlists, key=getmtime)
+        for playlist in playlists[-2:]:
+            listname = basename(playlist)
+            prefix = listname.split("_")[0]
+            if playlist == playlists[-2]:
+                prefix = f"Prev_{prefix}"
+            # Relative to current directory (set to ~/Music, above)
+            linkname = f"{prefix}_{list_type.capitalize()}.m3u"
+            mtime = getmtime(playlist)
+            """if lexists(linkname):
+                if mtime > getmtime(linkname):
+                    fn_logger.info(f"Removing symlink: {linkname}")
+                    os.unlink(linkname)
+                else:
+                    continue"""
+            make_symlink(playlist, linkname, overwrite=True, times=(mtime, mtime))
     return
 
 
 def make_symlink(filename, linkname, overwrite=False, times=None):
     fn_logger = logging.getLogger(__MODULE__ + ".make_symlink")
     msg = "Creating"
+    # Only overwrite older linknames
     if exists(linkname) and overwrite:
         if realpath(filename) != realpath(linkname):
-            msg = "Updating"
-            os.unlink(linkname)
+            if getmtime(filename) > getmtime(linkname):
+                msg = "Updating"
+                os.unlink(linkname)
     if not lexists(linkname):
         fn_logger.info(f"{msg} symlink: {linkname}")
         os.symlink(filename, linkname)
@@ -245,7 +253,7 @@ if __name__ == '__main__':
     # Configure Directories
     _data_dir = Config.DATA_DIR
     _music_dir = Config.MUSIC_DIR
-    _playlist_dir = Config.PLAYLIST_DIR
+    # _playlist_dir = Config.PLAYLIST_DIR
     tablename = Config.TABLE_NAME
 
     # Configure List Types
