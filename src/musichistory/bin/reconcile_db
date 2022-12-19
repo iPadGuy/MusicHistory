@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# reconcile_db.py - Tuesday, December 13, 2022
+""" Reconcile MusicHistory database with sytem files """
+__version__ = "0.1.3-dev1"
+
+import re, os, sys, tarfile
+import sqlalchemy as sa
+from datetime import datetime, timedelta, timezone
+from glob import glob
+from os.path import basename, exists, expanduser, getmtime, islink, join
+from pathlib import Path
+from subprocess import check_output
+from time import sleep
+from xdg import XDG_DATA_HOME, XDG_CONFIG_HOME
+
+appname = "MusicHistory"
+config_dir = XDG_CONFIG_HOME
+if not config_dir:
+	config_dir = os.path.expanduser("~/.config")
+if appname:
+	config_dir = os.path.join(config_dir, appname)
+try:
+	sys.path.insert(0, config_dir)
+except ModuleNotFoundError:
+	raise ModuleNotFoundError("config.py")
+from config import Config  # noqa
+
+# __MODULE__ = os.path.splitext(os.path.basename(__file__))[0]
+# BASEDIR = os.path.dirname(__file__)
+__MODULE__ = Path(__file__).resolve().stem
+BASEDIR = Path(__file__).resolve().parent
+
+
+def main():
+	remove_extra_spaces()
+	# update_playlists()
+	return
+
+
+def main_old():
+	log_filename = f"reconcile_db_{_fdatetime}.log"
+	cols = ", ".join(["DISTINCT filename",])
+	frm = f"{tablename}"
+	file_prefix = f"{_music_dir}/%"
+	since_date = datetime(2021, 12, 1).date()
+	ands = ["filename LIKE :file_prefix",
+	        "playdate >= :since_date",]
+	whr = " AND ".join(ands)
+	max_rows = 10000
+	params = {"file_prefix": file_prefix,
+	          "since_date": since_date,
+	          "max_rows": max_rows,
+	          }
+	sql = f"SELECT {cols} FROM {frm} WHERE {whr} LIMIT :max_rows;"
+	with engine.connect() as conn:
+		rows = conn.execute(sa.text(sql), params).fetchall()
+	if rows:
+		for i, row in enumerate(rows):
+			f = row["filename"]
+			b = basename(f)
+			print(f"{i+1:5d}) {f}")
+			if not exists(f):
+				escaped = re.escape(b).replace("\'", "\\'").replace("`", "\\`")
+				b = b.replace("`", "\\`")
+				cmd = f"locate -b \"{b}\""
+				print(f"  {cmd}")
+				output = check_output(cmd, shell=True, universal_newlines=True)
+				if output:
+					print(f"  Located: {output}")
+					do_nothing()
+				else:
+					# locate last 15 characters
+					stub = b[-15:]
+					if stub.startswith("-"):
+						stub = f"\\{stub}"
+					cmd = f"locate -b \"{stub}\""
+					print(f"  {cmd}")
+					output = check_output(cmd, shell=True, universal_newlines=True)
+					if output:
+						print(f"  Located: {output}")
+					else:
+						print("  Nothing located")
+					do_nothing()
+				# subprocess.call(cmd, shell=True, stdout=fp)
+				do_nothing()
+	return
+
+
+def init():
+	print(f"Run Start: {__MODULE__} v{__version__} {_run_dt}")
+	return
+
+
+def eoj():
+	stop_dt = datetime.now().astimezone().replace(microsecond=0)
+	duration = stop_dt.replace(microsecond=0) - _run_dt.replace(microsecond=0)
+	print("Run Stop : %s  Duration: %s" % (stop_dt, duration))
+	return
+
+
+def do_nothing():
+	pass
+
+
+def remove_extra_spaces():
+	os.chdir(_music_dir)
+	line_count = 0
+	for root, dirs, files in os.walk("."):
+		for fname in files:
+			if "  " in fname:
+				line_count += 1
+				oldname = join(root, fname)
+				newname = join(root, " ".join(fname.split()))
+				print(f"{line_count:5d}) {oldname}")
+				print(f"{line_count:5d}) {newname}")
+				os.rename(oldname, newname)
+				sleep(0.1)
+				do_nothing()
+		for dname in dirs:
+			if "  " in dname:
+				line_count += 1
+				oldname = join(root, dname)
+				newname = join(root, " ".join(dname.split()))
+				print(f"{line_count:5d}) {oldname}")
+				print(f"{line_count:5d}) {newname}")
+				os.rename(oldname, newname)
+				sleep(0.1)
+				do_nothing()
+
+	# Update database
+	cols = ", ".join([
+		"filename = array_to_string(regexp_split_to_array(filename,:db_regex), ' ')"
+	])
+	db_regex = r"\s+"
+	file_prefix = f"{_music_dir}/%"
+	file_pattern = "%  %"
+	ands = ["filename LIKE :file_prefix",
+	        "filename LIKE :file_pattern",
+	]
+	whr = " AND ".join(ands)
+	params = {"db_regex": db_regex,
+	          "file_prefix": file_prefix,
+	          "file_pattern": file_pattern,
+	}
+	sql = f"UPDATE {tablename} SET {cols} WHERE {whr};"
+	with engine.connect() as conn:
+		nrows = conn.execute(sa.text(sql), params).rowcount
+		print(f"Removed extra spaces in filenames for {nrows:,d} rows")
+	return
+
+
+def update_playlists():
+	""" Updates playlists, removing extra spaces from filenames, including directories
+		Symlinks are ignored
+		Playlists containing filenames that no longer exist are renamed with a ~.old extension
+	"""
+	os.chdir(_music_dir)
+	# Find playlists, including symlinks (for the tarball)
+	playlists = glob("**/*m3u", recursive=True) + glob(join(".Playlists", "**/*m3u"))
+	# Create tarball for playlists
+	tarfilename = f"Playlists_{_fdatetime}.txz"
+	with tarfile.open(tarfilename, "x:xz") as tar:
+		for playlist in playlists:
+			tar.add(playlist)
+	line_count = outdated_count = renamed_count = updated_count = 0
+	p = 0
+	# Exclude symlinks from being processed
+	for p, playlist in enumerate([x for x in playlists if not islink(x)]):
+		print(f"{p+1:5d}) {playlist}")
+		newlines = []
+		updated = False
+		outdated = False
+		with open(playlist) as infile:
+			oldlines = infile.readlines()
+		for oldline in oldlines:
+			line_count += 1
+			if not oldline.startswith(str(_music_dir)):
+				continue
+			if "  " in oldline:
+				newline = " ".join(oldline.split())
+				if not exists(newline):
+					outdated = True
+					break
+				updated = True
+			else:
+				newline = oldline
+			newlines.append(newline)
+		if outdated:
+			renamed_count += 1
+			print(f"       Renaming {playlist}")
+			os.rename(playlist, f"{playlist}~.old")
+			do_nothing()
+		elif updated and set(oldlines).difference(set(newlines)):
+			# Lines were updated
+			updated_count += 1
+			print(f"       Lines updated: {len(set(oldlines).difference(set(newlines)))}")
+			mtime = getmtime(playlist)
+			with open(playlist, "w") as newfile:
+				newfile.writelines(newlines)
+			sleep(0.1)
+			os.utime(playlist, times=(mtime, mtime))
+			do_nothing()
+	print(f"Playlists Processed: {p}")
+	print(f"Updated  Playlists : {updated_count}")
+	print(f"Outdated Playlists : {outdated_count} (renamed)")
+	return
+
+
+if __name__ == '__main__':
+	_run_dt = datetime.now().astimezone().replace(microsecond=0)
+	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_fdate = _run_dt.strftime("%Y-%m-%d")
+	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+
+	# Configure Directories
+	_data_dir = Path(XDG_DATA_HOME) / appname
+	_music_dir = Path("~/Music").expanduser()
+
+	# Configure Database
+	engine = sa.create_engine(Config.DATABASE_URL, echo=False)
+	schema = Config.DB_SCHEMA
+	tablename = Config.TABLE_NAME
+
+	@sa.event.listens_for(engine, "connect", insert=True)
+	def set_search_path(dbapi_connection, connection_record):
+		"""
+		Set schema search path in database
+		"""
+		sql = f"SET SESSION search_path TO {schema},public;"
+		existing_autocommit = dbapi_connection.autocommit
+		dbapi_connection.autocommit = True
+		cursor = dbapi_connection.cursor()
+		cursor.execute(sql)
+		cursor.close()
+		dbapi_connection.autocommit = existing_autocommit
+
+	init()
+	main()
+	eoj()

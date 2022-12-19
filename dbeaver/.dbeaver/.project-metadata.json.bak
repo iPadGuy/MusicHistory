@@ -1,1 +1,1 @@
-{"resources":{"Scripts/dt_playhistory.sql":{"default-datasource":"postgres-jdbc-184cff48bcd-41b063204c18077a"}}}
+{"resources":{"Scripts/Scratch.sql":{"default-datasource":"postgres-jdbc-184ce3f4f12-17883552032a5b9c","default-catalog":"developmentdb","default-schema":"media_library"},"Scripts/dt_playhistory.sql":{"default-schema":"media_library","default-datasource":"postgres-jdbc-184cff48bcd-41b063204c18077a","default-catalog":"developmentdb"}}}

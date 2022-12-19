@@ -5,9 +5,59 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Monday, December 19, 2022
+:LOGBOOK:
+CLOCK: [2022-12-19 Mon 05:00]--[2022-12-19 Mon 08:00] =>  3:00
+:END:
+** Regenerated all playlists
+- This applied changes in playlist creation logic and naming conventions, as well as the new *Countdown* list type
+*** ~build_playlists~
+- Restricted ~build_recent_lists()~ to run only for yesterday or today
+- Added ~--force~ option to overwrite playlists
+**** ~do_backup()~
+- Creates "smart" numbered backups of playlists before overwriting
+- If a backup exists and it is the same as the original, then there is no new backup file created
+**** ~find_prev_filename()~
+- Added this to deal with situations where there are missing playlists
+
+* Saturday, December 17, 2022
+:LOGBOOK:
+CLOCK: [2022-12-17 Sat 05:00]--[2022-12-17 Sat 10:30] =>  5:30
+:END:
+** Reconciling Music History database against file system
+*** ~reconcile_db~ (Python)
+**** ~remove_extra_spces()~
+- Finished code for updating ~dt_playhistory~ in ~developmentdb~ (4,336 rows)
+
+* Wednesday, December 14, 2022
+:LOGBOOK:
+CLOCK: [2022-12-14 Wed 08:30]--[2022-12-14 Wed 11:30] =>  3:00
+CLOCK: [2022-12-14 Wed 03:30]--[2022-12-14 Wed 07:30] =>  4:00
+:END:
+** ~build_playlists~
+*** Replacing ~make_aliases()~ with simpler logic
+- Trying to reverse engineer file names is silly when they are easily set in the calling function, ~build_top_lists()~
+*** Moved playlist creation to its own function, ~make_playlist()~
+- This evolved out of trying to create "Countdown" playlists
+* Tuesday, December 13, 2022
+:LOGBOOK:
+CLOCK: [2022-12-13 Tue 16:00]--[2022-12-13 Tue 18:15] =>  2:15
+:END:
+** Reconciling Music History database against file system
+*** Extra Spaces
+- I found a lot of filenames that contain two or more spaces in the filename
+- When compared against the database, it looked like spaces had been added to the filename
+*** ~reconcile_db~ (Python)
+**** ~remove_extra_spaces()~
+- Uses ~os.walk()~ to remove extra spaces from filenames, including directories
+- Working on updating ~dt_playhistory~ in ~developmentdb~
+**** ~update_playlists()~
+- Creates a tarball of all playlists (including symlinks) before doing anything else
+- Updates playlists, removing extra spaces from filenames, including directories
+- If the updated playlist contains filenames that no longer exist, they are renamed with a ~~.old~ extension
 * Sunday, December 11, 2022
 :LOGBOOK:
-CLOCK: [2022-12-11 Sun 05:00]
+CLOCK: [2022-12-11 Sun 05:00]--[2022-12-11 Sun 06:45] =>  1:45
 :END:
 ** Still working on deleting last uncompressed log file in ~log_extractor~
 *** Switching to a single tarball didn't fix it
