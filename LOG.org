@@ -5,6 +5,41 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Saturday, December 24, 2022
+:LOGBOOK:
+CLOCK: [2022-12-24 Sat 14:45]--[2022-12-24 Sat 16:15] =>  1:30
+CLOCK: [2022-12-24 Sat 06:30]--[2022-12-24 Sat 10:00] =>  3:30
+:END:
+** Migration to ~pendulum~
+** Christmas Playlists
+
+* Thursday, December 22, 2022
+:LOGBOOK:
+CLOCK: [2022-12-22 Thu 04:00]--[2022-12-22 Thu 10:30] =>  6:30
+:END:
+** Reconciling Music History database against file system
+*** Christmas Collection
+**** ~update_collection()~
+- Strange: I can't find any Christmas music that I played in previous years
+* Wednesday, December 21, 2022
+:LOGBOOK:
+CLOCK: [2022-12-21 Wed 10:00]--[2022-12-21 Wed 12:00] =>  2:00
+CLOCK: [2022-12-21 Wed 04:00]--[2022-12-21 Wed 09:00] =>  5:00
+:END:
+** Reconciling Music History database against file system
+*** ~relocated_files()~
+*** ~similar_filenames()~
+*** ~update_db_filename()~
+*** ~fix_directory()~
+**** theclashVEVO Directory
+* Tuesday, December 20, 2022
+:LOGBOOK:
+CLOCK: [2022-12-20 Tue 08:00]--[2022-12-20 Tue 11:30] =>  3:30
+:END:
+** Reconciling Music History database against file system
+*** ~relocated_files()~
+- Comparing filenames in the database against the file system
+- So far, I am finding duplicate filenames, with and without spaces
 * Monday, December 19, 2022
 :LOGBOOK:
 CLOCK: [2022-12-19 Mon 05:00]--[2022-12-19 Mon 08:00] =>  3:00

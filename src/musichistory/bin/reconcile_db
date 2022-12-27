@@ -2,14 +2,15 @@
 # -*- coding: utf-8 -*-
 # reconcile_db.py - Tuesday, December 13, 2022
 """ Reconcile MusicHistory database with sytem files """
-__version__ = "0.1.3-dev1"
+__version__ = "0.2.8-dev2"
 
-import re, os, sys, tarfile
+import os, pendulum, re, sys, tarfile
 import sqlalchemy as sa
 from datetime import datetime, timedelta, timezone
 from glob import glob
-from os.path import basename, exists, expanduser, getmtime, islink, join
+from os.path import basename, dirname, exists, expanduser, getmtime, islink, join, splitext
 from pathlib import Path
+from random import uniform
 from subprocess import check_output
 from time import sleep
 from xdg import XDG_DATA_HOME, XDG_CONFIG_HOME
@@ -33,74 +34,312 @@ BASEDIR = Path(__file__).resolve().parent
 
 
 def main():
+	reconcile_history(expanduser("~/.local/var/log/smplayer_history_2022-12-31"))
+	# update_collection(_music_dir / "Christmas")
+	# fix_directory(_music_dir / "theclashVEVO")
+	"""relocated_files()
 	remove_extra_spaces()
-	# update_playlists()
-	return
-
-
-def main_old():
-	log_filename = f"reconcile_db_{_fdatetime}.log"
-	cols = ", ".join(["DISTINCT filename",])
-	frm = f"{tablename}"
-	file_prefix = f"{_music_dir}/%"
-	since_date = datetime(2021, 12, 1).date()
-	ands = ["filename LIKE :file_prefix",
-	        "playdate >= :since_date",]
-	whr = " AND ".join(ands)
-	max_rows = 10000
-	params = {"file_prefix": file_prefix,
-	          "since_date": since_date,
-	          "max_rows": max_rows,
-	          }
-	sql = f"SELECT {cols} FROM {frm} WHERE {whr} LIMIT :max_rows;"
-	with engine.connect() as conn:
-		rows = conn.execute(sa.text(sql), params).fetchall()
-	if rows:
-		for i, row in enumerate(rows):
-			f = row["filename"]
-			b = basename(f)
-			print(f"{i+1:5d}) {f}")
-			if not exists(f):
-				escaped = re.escape(b).replace("\'", "\\'").replace("`", "\\`")
-				b = b.replace("`", "\\`")
-				cmd = f"locate -b \"{b}\""
-				print(f"  {cmd}")
-				output = check_output(cmd, shell=True, universal_newlines=True)
-				if output:
-					print(f"  Located: {output}")
-					do_nothing()
-				else:
-					# locate last 15 characters
-					stub = b[-15:]
-					if stub.startswith("-"):
-						stub = f"\\{stub}"
-					cmd = f"locate -b \"{stub}\""
-					print(f"  {cmd}")
-					output = check_output(cmd, shell=True, universal_newlines=True)
-					if output:
-						print(f"  Located: {output}")
-					else:
-						print("  Nothing located")
-					do_nothing()
-				# subprocess.call(cmd, shell=True, stdout=fp)
-				do_nothing()
+	update_playlists()"""
 	return
 
 
 def init():
-	print(f"Run Start: {__MODULE__} v{__version__} {_run_dt}")
+	print(f"Run Start: {__MODULE__} v{__version__} {_run_dt.format(_datefmt)}")
 	return
 
 
 def eoj():
-	stop_dt = datetime.now().astimezone().replace(microsecond=0)
-	duration = stop_dt.replace(microsecond=0) - _run_dt.replace(microsecond=0)
-	print("Run Stop : %s  Duration: %s" % (stop_dt, duration))
+	stop_dt = pendulum.now()
+	duration = stop_dt - _run_dt
+	print(f"Run Stop : {stop_dt.format(_datefmt)}  Duration: {duration.as_timedelta()}")
 	return
 
 
 def do_nothing():
 	pass
+
+
+def find_newnames(filename: str) -> list[str]:
+	newnames = []
+	if filename[-16] == "-":
+		stub = filename[-15:]
+		newnames = glob(join(_music_dir, f"**/*{stub}"))
+	return newnames
+
+
+def fix_directory(dir_name: str | Path):
+	dir_name = str(dir_name)
+	if not exists(dir_name):
+		raise FileNotFoundError(dir_name)
+	urls = []
+	url_count = 0
+	for old_entry in [x for x in os.scandir(dir_name) if x.name.endswith("mp4")]:
+		print(old_entry.name)
+		if old_entry.name[-16] == "-":
+			video_id = old_entry.name[-15:-4]
+			url = f"https://youtu.be/{video_id}"
+			url_count += 1
+			urls.append(url)
+			do_nothing()
+		filenames = glob(join(_music_dir, f"**/*{old_entry.name[-15:]}"), recursive=True)
+		# filenames += find_all(old_entry.name, _music_dir)
+		filenames = sorted(list(set([x for x in filenames if not x.startswith(dir_name)])))
+		if filenames:
+			print(f"Renaming {old_entry.path} to ~.old")
+			os.rename(old_entry.path, f"{old_entry.path}~.old")
+			for filename in filenames:
+				print(f"- {filename}")
+	if urls:
+		filename = expanduser("~/Desktop/todo-music")
+		with open(filename, "wt") as fp:
+			fp.writelines([f"{x}\n" for x in urls])
+	return
+
+
+def reconcile_history(history_filename: str):
+	if not exists(history_filename):
+		raise FileNotFoundError(history_filename)
+	since_ts = pendulum.datetime(2021, 12, 1).timestamp()
+	# Import smplayer history
+	lines = []
+	seen_filenames = []
+	moved_filenames = []
+	not_on_disk = []
+	not_in_db = []
+	urls = []
+	with open(history_filename) as histfile, engine.connect() as conn:
+		for line in ([x.rstrip() for x in histfile.readlines()]):
+			flags = []
+			filename, timestamp = line.split("\t")
+			filename = str(filename)
+			timestamp = float(timestamp)
+			if timestamp < since_ts:
+				continue
+			if filename in seen_filenames:
+				continue
+			seen_filenames.append(filename)
+			if filename.startswith("./"):
+				do_nothing()
+			if not filename.startswith(str(_music_dir)):
+				continue
+			play_dt = pendulum.from_timestamp(timestamp)
+			newnames = []
+			# Does the file exist on disk?
+			if not exists(filename):
+				moved_files = find_newnames(filename)
+				if moved_files:
+					flags.append("MOVED")
+				else:
+					flags.append("NOFILE")
+				not_on_disk.append(filename)
+			# is the filename in the database?
+			sql = f"SELECT count(*) AS nrows FROM {_tablename} WHERE filename = :filename;"
+			params = {"filename": filename}
+			nrows = conn.execute(sa.text(sql), params).fetchone()[0]
+			if nrows == 0:
+				not_in_db.append(filename)
+				# Is this a YouTube video?
+				if filename[-16] == "-":
+					stub = filename[-15:]
+					video_id = stub[:-4]
+					sql = f"SELECT DISTINCT filename FROM {_tablename} WHERE filename LIKE :stub;"
+					params = {"stub": f"%{stub}"}
+					rows = conn.execute(sa.text(sql), params).fetchall()
+					if rows:
+						flags.append("MOVED")
+						moved_filenames.append(filename)
+						for row in rows:
+							if not exists(row["filename"]):
+								# Should be a rare event
+								do_nothing()
+							else:
+								newnames.append(row["filename"])
+								if "NOFILE" in flags:
+									flags.remove("NOFILE")
+					else:
+						flags.append("NODB")
+					do_nothing()
+			nflags1 = len(flags)
+			flags = sorted(list(set(flags)))
+			nflags2 = len(flags)
+			if nflags1 != nflags2:
+				do_nothing()
+			msgs = " ".join(flags)
+			print(f"{play_dt.format(_datefmt)} {msgs:10s} {filename}")
+			if "MOVED" in flags:
+				if "NOFILE" in flags:
+					if newnames:
+						do_nothing()
+					if filename in moved_filenames:
+						continue
+					if filename[-16] == "-":
+						stub = filename[-15:]
+						video_id = stub[:-4]
+						moved_files = glob(join(_music_dir, f"**/*{stub}"))
+						if moved_files:
+							newnames.extend(moved_files)
+							flags.remove("NOFILE")
+							do_nothing()
+				spacer = " " * len(play_dt.format(_datefmt))
+				msg = "New Name:"
+				for newname in newnames:
+					print(f"{spacer} {msg:10s} {newname}")
+					do_nothing()
+			if msgs:
+				if "NODB" in msgs:
+					not_in_db.append(filename)
+					do_nothing()
+				elif "NOFILE" in msgs:
+					url = f"https://youtu.be/{video_id}"
+					not_on_disk.append(filename)
+					if url not in urls:
+						urls.append(url)
+					do_nothing()
+	not_on_disk = sorted(list(set(not_on_disk) - set(moved_filenames)))
+	not_in_db = sorted(list(set(not_in_db) - set(moved_filenames)))
+	playlist_items = []
+	if not_on_disk:
+		print("Not on Disk:")
+		for i, filename in enumerate(not_on_disk):
+			print(f"{i + 1:5d}) {filename}")
+	if not_in_db:
+		print("Not in Database:")
+		for i, filename in enumerate(not_in_db):
+			print(f"{i+1:5d}) {filename}")
+			if "/Christmas/" in filename:
+				playlist_items.append(filename)
+		if playlist_items:
+			playlistname = expanduser("~/Music/ChristmasNotInDB.m3u")
+			print(f"Writing {len(playlist_items)} items to '{playlistname}'")
+			with open(playlistname, "wt") as pfile:
+				pfile.writelines([f"{x}\n" for x in playlist_items])
+	if urls:
+		filename = expanduser("/tmp/todo-music")
+		print(f"Writing {len(urls)} URLs to '{filename}'")
+		with open(filename, "wt") as fp:
+			fp.writelines([f"{x}\n" for x in urls])
+	return
+
+
+def relocated_files():
+	""" Update dt_playhistory with new locations """
+	missing_db_files = []
+	until_ts = pendulum.datetime(2022,3,31).timestamp()
+	max_rows = 10000
+	cols = ", ".join(["filename",
+	                  "min(epochtime) AS min_epochtime",
+	])
+	frm = f"{_tablename}"
+	whr = f"epochtime < :until_ts"
+	grp = "filename"
+	ordr = grp
+
+	sql = f"SELECT {cols} FROM {frm} WHERE {whr} GROUP BY {grp} ORDER BY {ordr} LIMIT :max_rows;"
+	params = {"sep": os.sep,
+	          "until_ts": until_ts,
+	          "max_rows": max_rows,
+	}
+	i = 0
+	db_filenames = []
+	with engine.connect() as conn:
+		for db_filename, epochtime in conn.execute(sa.text(sql), params):
+			if exists(db_filename):
+				db_filenames.append(db_filename)
+			else:
+				i += 1
+				dt = pendulum.from_timestamp(epochtime, tz='local')
+				missing_db_files.append(db_filename)
+				print(f"{i:5d}) {dt.format(_datefmt)}\t{db_filename}")
+	if missing_db_files:
+		do_nothing()
+	else:
+		print("No missing DB files detected")
+
+	# Next Section
+	false_tests = []
+	disk_filenames = glob(join(_music_dir, "**/*mp4"), recursive=True)
+	not_db_files = sorted(list(set(disk_filenames) - (set(db_filenames))))
+	not_on_disk =  sorted(list(set(db_filenames) -   (set(disk_filenames))))
+	if not_db_files:
+		print(f"Number of disk files not in DB (unconfirmed): {len(not_db_files)}")
+		# max_rows = 1000
+		i = 0
+		for not_db_file in not_db_files:
+			i += 1
+			print(f"{i:5d}) {not_db_file}")
+			not_db_dir = dirname(not_db_file)
+			sql = f"""
+				SELECT DISTINCT filename
+				FROM {_tablename}
+				WHERE filename LIKE :pattern
+				  AND filename != :not_db_file;
+			""".strip()
+			params = {"pattern": f"%{basename(not_db_file)}",
+			          "not_db_file": not_db_file,
+			}
+			j = 0
+			with engine.connect() as conn:
+				for row in conn.execute(sa.text(sql), params).fetchall():
+					j += 1
+					db_filename = row["filename"]
+					if "/theclashVEVO/" in db_filename:
+						continue
+					print(f"       {db_filename}" )
+					if " " in not_db_file and "_" in db_filename:
+						spaced_name = not_db_file
+						underscored_file = db_filename
+						do_nothing()
+					elif " " in db_filename and "_" in not_db_file:
+						spaced_name = db_filename
+						underscored_file = not_db_file
+						do_nothing()
+					else:
+						update_db_filename(db_filename, not_db_file)
+						continue
+					unspaced_name = spaced_name.replace(" ", "_")
+					if unspaced_name == underscored_file:
+						similar_filenames(spaced_name, unspaced_name)
+						do_nothing()
+					else:
+						# Different directories?
+						db_dirname = dirname(db_filename)
+						if " " in not_db_dir and "_" in db_dirname:
+							spaced_dir = not_db_dir
+							underscored_dir = db_dirname
+							do_nothing()
+						elif " " in db_dirname and "_" in not_db_dir:
+							spaced_dir = db_dirname
+							underscored_dir = not_db_dir
+							do_nothing()
+						elif not_db_dir.endswith("theclashVEVO"):
+							print("       Skipping directory: 'theclashVEVO'")
+							continue
+						elif " " not in not_db_dir and " " not in db_dirname:
+							preferred_file = not_db_file
+							old_file = db_filename
+							update_db_filename(old_file, preferred_file)
+							do_nothing()
+						elif db_dirname.endswith("VEVO"):
+							not_vevo_dir = not_db_dir.replace("_","").replace(" ", "")
+							unvevo_dir = db_dirname.strip("VEVO")
+							if not_vevo_dir == unvevo_dir:
+								preferred_dir = not_db_dir
+								do_nothing()
+							else:
+								do_nothing()
+							if not_db_dir.startswith(preferred_dir):
+								preferred_file = not_db_file
+								old_file = db_filename
+								update_db_filename(old_file, preferred_file)
+								do_nothing()
+							else:
+								# The older VEVO dir?
+								do_nothing()
+							do_nothing()
+						do_nothing()
+	if not_on_disk:
+		do_nothing()
+	return
 
 
 def remove_extra_spaces():
@@ -134,20 +373,128 @@ def remove_extra_spaces():
 	])
 	db_regex = r"\s+"
 	file_prefix = f"{_music_dir}/%"
-	file_pattern = "%  %"
+	pattern = "%  %"
 	ands = ["filename LIKE :file_prefix",
-	        "filename LIKE :file_pattern",
+	        "filename LIKE :pattern",
 	]
 	whr = " AND ".join(ands)
 	params = {"db_regex": db_regex,
 	          "file_prefix": file_prefix,
-	          "file_pattern": file_pattern,
+	          "pattern": pattern,
 	}
-	sql = f"UPDATE {tablename} SET {cols} WHERE {whr};"
+	sql = f"UPDATE {_tablename} SET {cols} WHERE {whr};"
 	with engine.connect() as conn:
 		nrows = conn.execute(sa.text(sql), params).rowcount
 		print(f"Removed extra spaces in filenames for {nrows:,d} rows")
 	return
+
+
+def similar_filenames(spaced_filename: str, underscored_filename: str):
+	# Reconcile filenames where the only difference is spaces vs. underscores
+	db_similar_tuples = []
+	disk_similar_tuples = []
+	spaced_exists = exists(spaced_filename)
+	underscored_exists = exists(underscored_filename)
+	if spaced_exists:
+		# Spaced filename on disk
+		if underscored_exists:
+			# Both filenames exist on disk
+			print(f"       {spaced_filename} to ~.old")
+			os.rename(spaced_filename, f"{spaced_filename}~.old")
+			do_nothing()
+		else:
+			# Spaced filename exists, but not underscored
+			do_nothing()
+	else:
+		# Spaced filename not on disk
+		if underscored_exists:
+			# Underscored filename exists, but not spaced
+			update_db_filename(spaced_filename, underscored_filename)
+			do_nothing()
+		else:
+			# Neither filename exists on disk (shouldn't happen)
+			do_nothing()
+	sql = f"""
+		SELECT 'spaced_count', count(*)
+		FROM {_tablename}
+		WHERE filename = :spaced_filename
+		UNION
+		SELECT 'underscored_count', count(*)
+		FROM {_tablename}
+		WHERE filename = :underscored_filename;
+		""".strip()
+	params = {"spaced_filename": spaced_filename,
+	          "underscored_filename": underscored_filename,
+	}
+	with engine.connect() as conn:
+		for count_type, qty in conn.execute(sa.text(sql), params).fetchall():
+			if count_type == "spaced_count":
+				if qty == 0:
+					continue
+			elif count_type == "underscored_count":
+				do_nothing()
+		sql = f"""
+			UPDATE {_tablename} SET filename = :underscored_filename
+			WHERE filename = :spaced_filename; 
+		""".strip()
+		row_count = conn.execute(sa.text(sql), params).rowcount
+		print(f"Updated {row_count} rows for {underscored_filename}")
+		do_nothing()
+	return
+
+
+def update_collection(dir_name: str | Path):
+	dir_name = str(dir_name)
+	if not exists(dir_name):
+		raise FileNotFoundError(f"Not Found: '{dir_name}'")
+	print(f"Collection: {dir_name}")
+	filenames = [basename(x) for x in glob(join(dir_name, "**/*mp4"), recursive=True)]
+	for i, f in enumerate(filenames):
+		print(f"{i+1:4d}) {f}")
+	max_rows = 10000
+	array = [f"%{x}" for x in filenames]
+	ands = [f"filename NOT LIKE :not_prefix",
+	        "filename LIKE ANY(ARRAY[:array])",
+	]
+	whr = " AND ".join(ands)
+	params = {"array": array,
+	          "not_prefix": f"{dir_name}/%",
+	          "max_rows": max_rows,
+	}
+	sql = f"""
+		SELECT DISTINCT filename
+		FROM {_tablename}
+		WHERE {whr}
+		LIMIT :max_rows;
+	""".strip()
+	filename_lookup = []
+	with engine.connect() as conn:
+		rows = conn.execute(sa.text(sql), params).fetchall()
+		print(f"Row count: {len(rows)}")
+		for row in rows:
+			filename_lookup.append((basename(row["filename"]), row["filename"]))
+	if filename_lookup:
+		for f in filename_lookup:
+			print(f)
+	return
+
+
+def update_db_filename(oldfilename: str, newfilename: str):
+	row_count = -1
+	# Sanity check
+	if not exists(newfilename):
+		raise FileNotFoundError(newfilename)
+	if "/theclashVEVO/" in newfilename:
+		print(f"Cowardly refusing to rename '{oldfilename}' to '{newfilename}'", file=sys.stderr)
+	if exists(oldfilename):
+		print(f"       {oldfilename} to ~.old")
+		os.rename(oldfilename, f"{oldfilename}~.old")
+	sql = f"UPDATE {_tablename} SET filename = :newfilename WHERE filename = :oldfilename;"
+	params = {"newfilename": newfilename, "oldfilename": oldfilename}
+	with engine.connect() as conn:
+		row_count = conn.execute(sa.text(sql), params).rowcount
+		print(f"Updated {row_count} rows for {newfilename}")
+	return row_count
 
 
 def update_playlists():
@@ -208,10 +555,11 @@ def update_playlists():
 
 
 if __name__ == '__main__':
-	_run_dt = datetime.now().astimezone().replace(microsecond=0)
-	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_run_dt = pendulum.now()  # .replace(microsecond=0)
+	_run_utc = _run_dt.astimezone(timezone.utc)  # .replace(tzinfo=None)
 	_fdate = _run_dt.strftime("%Y-%m-%d")
 	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+	_datefmt = "YYYY-MM-DD HH:mm:ssZ"
 
 	# Configure Directories
 	_data_dir = Path(XDG_DATA_HOME) / appname
@@ -220,7 +568,7 @@ if __name__ == '__main__':
 	# Configure Database
 	engine = sa.create_engine(Config.DATABASE_URL, echo=False)
 	schema = Config.DB_SCHEMA
-	tablename = Config.TABLE_NAME
+	_tablename = Config.TABLE_NAME
 
 	@sa.event.listens_for(engine, "connect", insert=True)
 	def set_search_path(dbapi_connection, connection_record):

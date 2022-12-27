@@ -13,6 +13,7 @@ psycopg2 = "*"
 click = "*"
 oyaml = "*"
 coloredlogs = "*"
+# musichistory = {editable = true, path = "."}
 musichistory = {editable = true, path = "."}
 
 [dev-packages]

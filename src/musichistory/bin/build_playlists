@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 # build_playlists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.7.31-dev4"
+__version__ = "0.7.33-dev0"
 
-import click, coloredlogs, logging, os, shutil, sys
+import click, coloredlogs, logging, os, pendulum, shutil, sys, time
 import sqlalchemy as sa
 import logging.config
 import oyaml as yaml
-from datetime import datetime, timedelta, timezone
+# from datetime import datetime, timedelta, timezone
 from dateutil.parser import parse, ParserError
 from dateutil.relativedelta import relativedelta
 from glob import glob
@@ -43,7 +43,8 @@ def main(list_date, force):
     fn_logger = logging.getLogger(__MODULE__ + ".main")
 
     fn_logger.info(f"List Date: {list_date}")
-    yesterday = (_run_dt - timedelta(days=1)).date()
+    yesterday = pendulum.yesterday().date()
+    # yesterday = (_run_dt - timedelta(days=1)).date()
     if list_date.lower() in ["today", "yesterday"]:
         list_date = yesterday
     else:
@@ -63,7 +64,7 @@ def main(list_date, force):
 
 def init():
     fn_logger = logging.getLogger(__MODULE__ + ".init")
-    fn_logger.debug(f"{__MODULE__} v{__version__} Run Start: {_run_dt}")
+    fn_logger.debug(f"{__MODULE__} v{__version__} Run Start: {_run_dt.format(_datefmt)}")
     return
 
 
@@ -71,9 +72,9 @@ def eoj():
     fn_logger = logging.getLogger(__MODULE__ + ".eoj")
     # Create symlinks in Music folder
     # make_aliases()
-    stop_dt = datetime.now().astimezone().replace(microsecond=0)
-    duration = stop_dt.replace(microsecond=0) - _run_dt.replace(microsecond=0)
-    fn_logger.debug(f"Run Stop: {stop_dt}  Duration: {duration}")
+    stop_dt = pendulum.now()
+    duration = stop_dt - _run_dt
+    fn_logger.debug(f"Run Stop: {stop_dt.format(_datefmt)}  Duration: {duration.as_timedelta()}")
     return
 
 
@@ -117,7 +118,7 @@ def build_query(db_column: str) -> str:
     return query
 
 
-def build_recent_lists(list_date: datetime.date) -> None:
+def build_recent_lists(list_date: pendulum.date) -> None:
     fn_logger = logging.getLogger(__MODULE__ + ".build_recent_lists")
     fn_logger.info("Generating playlist(s) for recent items . . .")
     os.chdir(_music_dir)
@@ -170,11 +171,12 @@ def build_recent_lists(list_date: datetime.date) -> None:
         #                      ).timestamp()
         # Add filenames to playlist
         for i, row in enumerate(result.fetchall()):
-            fn_logger.info(f"{i+1:3d}) {basename(row['filename'])}")
+            fn_logger.debug(f"{i+1:3d}) {basename(row['filename'])}")
             playlist.append(row["filename"])
 
     # Timestamp for playlist
-    mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
+    mtime = date_to_timestamp(list_date, end_of_day=True)
+    # mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
     if exists(playlist_filename):
         old_playlist_mtime = playlist_filename.stat().st_mtime
     else:
@@ -192,7 +194,7 @@ def build_recent_lists(list_date: datetime.date) -> None:
     return
 
 
-def build_top_lists(list_date: datetime.date, force: bool) -> None:
+def build_top_lists(list_date: pendulum.date, force: bool) -> None:
     fn_logger = logging.getLogger(__MODULE__ + ".build_top_lists")
     playlists = which_lists(list_date)
     os.chdir(_music_dir)
@@ -252,7 +254,7 @@ def build_top_lists(list_date: datetime.date, force: bool) -> None:
                     )
                     continue
                 for row_number, playcount, playsecs, filename in result.fetchall():
-                    fn_logger.info(
+                    fn_logger.debug(
                         f"{row_number:3d}) {playcount:3d} {playsecs:9.2f} {basename(filename)}"
                     )
                     playlist.append(filename)
@@ -268,7 +270,8 @@ def build_top_lists(list_date: datetime.date, force: bool) -> None:
             fn_logger.info(f"Generating '{filename.name}'")
             make_playlist(filename, list_date, playlist, force)
             # Timestamp for playlist
-            mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
+            mtime = date_to_timestamp(list_date, end_of_day=True)
+            # mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
             for alias in [linkname, aliasname, prev_aliasname]:
                 if alias == prev_aliasname:
                     src = prev_filename
@@ -295,6 +298,16 @@ def build_top_lists(list_date: datetime.date, force: bool) -> None:
     else:
         fn_logger.info(f"No playlists to generate for {list_date}")
     return
+
+
+def date_to_timestamp(list_date: pendulum.date, end_of_day: bool=False) -> float:
+    y, m, d = list_date.year, list_date.month, list_date.day
+    dt = pendulum.datetime(y, m, d, tz="local")
+
+    if end_of_day:
+        dt = dt.end_of("day")
+    ts = dt.timestamp()
+    return ts
 
 
 def do_backup(pathname: str | Path, max_backups: int = 10) -> str | None:
@@ -326,9 +339,10 @@ def do_backup(pathname: str | Path, max_backups: int = 10) -> str | None:
     return backupname
 
 
-def find_prev_filename(list_date: datetime.date, playlist_dir: str | Path, countdown: bool=False) -> str | None:
+def find_prev_filename(list_date: pendulum.date, playlist_dir: str | Path, countdown: bool=False) -> str | None:
     prev_list = None
-    list_ts = datetime.combine(list_date, datetime.min.time()).timestamp()
+    list_ts = date_to_timestamp(list_date)
+    # list_ts = datetime.combine(list_date, datetime.min.time()).timestamp()
     if not countdown:
         playlists = [x for x in os.scandir(playlist_dir)
                      if x.name.endswith("m3u")
@@ -391,10 +405,11 @@ def make_aliases_old():
 
 
 def make_playlist(
-    filename: str, list_date: datetime.date, playlist: list | set, force: bool
+    filename: str, list_date: pendulum.date, playlist: list | set, force: bool
 ) -> None:
     # Timestamp for playlist
-    mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
+    mtime = date_to_timestamp(list_date, end_of_day=True)
+    # mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
     backupname = None
     if exists(filename):
         if force:
@@ -439,7 +454,7 @@ def make_symlink(filename, linkname, overwrite=False, times=None):
     return
 
 
-def which_lists(list_date: datetime.date) -> dict:
+def which_lists(list_date: pendulum.date) -> dict:
     playlists = dict()
 
     sql = f"SELECT * FROM dim_date WHERE date_id = :list_date;"
@@ -474,13 +489,14 @@ def do_nothing():
 
 
 if __name__ == "__main__":
-    _run_dt = datetime.now().astimezone().replace(microsecond=0)
-    _run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    _run_dt = pendulum.now()
+    _run_utc = _run_dt.astimezone(pendulum.timezone("UTC"))
+    # _datefmt = "YYYY-MM-DD HH:mm:ss.SSSSSSZZ zz z"
+    _datefmt = "YYYY-MM-DD HH:mm:ss.SSSSSSZZ"
+    # _run_dt = pendulum.now().astimezone().replace(microsecond=0)
+    # _run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
     _fdate = _run_dt.strftime("%Y-%m-%d")
     _fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
-    # _midnight_dt = _run_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    # _yesterday_dt = (_midnight_dt - timedelta(days=1))
-    # _yesterday =
 
     # Configure Directories
     _data_dir = Config.DATA_DIR

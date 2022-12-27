@@ -3,6 +3,24 @@
 
 SET search_path TO media_library,public;
 
+-- Christmas Songs
+COPY (
+	SELECT	ROW_NUMBER() OVER(ORDER BY count(*) DESC, sum(play_secs) DESC) AS rownum,
+		count(*) AS playcount,
+		sum(play_secs) AS total_play_secs,
+		dpt.filename
+	FROM	dt_playhistory dpt INNER JOIN
+		dim_date dd ON
+			dpt.playdate = dd.date_id
+	WHERE	dd.date_id BETWEEN '2022-12-01' AND '2022-12-24' AND
+		dpt.play_secs > 30 AND
+		dpt.filename LIKE '/home/patrick/Music/Christmas/%'
+	GROUP BY dpt.filename HAVING count(*) > 1
+	ORDER BY playcount DESC
+	LIMIT 250)
+TO '/tmp/Christmas.tsv' DELIMITER E'\t' CSV HEADER;
+
+-- Testing
 SELECT filename
 FROM (
 	SELECT filename, max(playdatetime) last_played
