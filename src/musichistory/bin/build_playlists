@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # build_playlists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.7.33-dev0"
+__version__ = "0.8.34-dev0"
 
 import click, coloredlogs, logging, os, pendulum, shutil, sys, time
 import sqlalchemy as sa
@@ -40,9 +40,9 @@ __MODULE__ = Path(__file__).resolve().stem
     "-f", "--force/--no-force", is_flag=True, default=True, help="Force playlists to be written (overwrite)"
 )
 def main(list_date, force):
-    fn_logger = logging.getLogger(__MODULE__ + ".main")
+    # fn_logger = logging.getLogger(__MODULE__ + ".main")
 
-    fn_logger.info(f"List Date: {list_date}")
+    fn_logger.debug(f"List Date: {list_date}")
     yesterday = pendulum.yesterday().date()
     # yesterday = (_run_dt - timedelta(days=1)).date()
     if list_date.lower() in ["today", "yesterday"]:
@@ -59,17 +59,18 @@ def main(list_date, force):
     build_top_lists(list_date, force)
     if list_date == yesterday:
         build_recent_lists(list_date)
+        build_dusty_lists(list_date)
     return
 
 
 def init():
-    fn_logger = logging.getLogger(__MODULE__ + ".init")
+    # fn_logger = logging.getLogger(__MODULE__ + ".init")
     fn_logger.debug(f"{__MODULE__} v{__version__} Run Start: {_run_dt.format(_datefmt)}")
     return
 
 
 def eoj():
-    fn_logger = logging.getLogger(__MODULE__ + ".eoj")
+    # fn_logger = logging.getLogger(__MODULE__ + ".eoj")
     # Create symlinks in Music folder
     # make_aliases()
     stop_dt = pendulum.now()
@@ -79,7 +80,7 @@ def eoj():
 
 
 def build_query(db_column: str) -> str:
-    fn_logger = logging.getLogger(__MODULE__ + ".build_query")
+    # fn_logger = logging.getLogger(__MODULE__ + ".build_query")
     cols = ", ".join(
         [
             "ROW_NUMBER() OVER(ORDER BY count(*) DESC, sum(play_secs) DESC) AS rownum",
@@ -118,13 +119,74 @@ def build_query(db_column: str) -> str:
     return query
 
 
+def build_dusty_lists(list_date: pendulum.date) -> None:
+    """
+    Builds playlist for songs that haven't been played in a while
+    """
+    fn_logger.info("Generating playlist(s) for \"dusty\" items . . .")
+    os.chdir(_music_dir)
+    playlist_dir = Path(".Playlists")
+
+    # Set parameters for database query
+    list_size = 25
+    list_type = "dusty"
+    list_name = f"{list_type.capitalize()}{list_size}"
+    playlist_filename = playlist_dir / f"{list_name}.m3u"
+    linkname = playlist_filename.name
+    fn_logger.debug(f"Generating '{playlist_filename.name}'")
+    params = {
+        "list_size": list_size,
+    }
+    sql = "SELECT filename FROM dusty_30 ORDER BY random() LIMIT :list_size;"
+    playlist = []
+    with engine.connect() as conn:
+        result = conn.execute(sa.text(sql), params)
+        fn_logger.info(
+            f"{list_type.capitalize()} {list_size}: Row count: {result.rowcount}"
+        )
+        # Only generate playlists if there are enough items
+        if result.rowcount < list_size * 0.8:
+            fn_logger.warning(f"Not enough items to generate playlist '{list_name}'")
+            raise Warning(f"Not enough items to generate playlist '{list_name}'")
+        # new_playlist_mtime = (datetime.fromisoformat(yesterday.isoformat())
+        #                      + timedelta(hours=23, minutes=59, seconds=59, microseconds=999999)
+        #                      ).timestamp()
+        # Add filenames to playlist
+        for i, row in enumerate(result.fetchall()):
+            fn_logger.debug(f"{i+1:3d}) {basename(row['filename'])}")
+            playlist.append(row["filename"])
+
+    # Timestamp for playlist
+    mtime = date_to_timestamp(list_date, end_of_day=True)
+    # mtime = datetime.combine(list_date, datetime.max.time()).timestamp()
+    if exists(playlist_filename):
+        old_playlist_mtime = playlist_filename.stat().st_mtime
+    else:
+        old_playlist_mtime = -1
+    if mtime > old_playlist_mtime:
+        fn_logger.info(f"Writing playlist to '{playlist_filename}'")
+        os.makedirs(os.path.dirname(playlist_filename), exist_ok=True)
+        with open(playlist_filename, "w") as pfile:
+            pfile.writelines([x + "\n" for x in playlist])
+        sleep(0.1)
+        # Set mtime to list_date
+        os.utime(playlist_filename, times=(mtime, mtime))
+        # Create symlink in Music folder
+        make_symlink(playlist_filename, linkname, overwrite=True, times=(mtime, mtime))
+
+    return
+
+
 def build_recent_lists(list_date: pendulum.date) -> None:
-    fn_logger = logging.getLogger(__MODULE__ + ".build_recent_lists")
+    """
+    Builds playlist for the last 25 songs played
+    """
+    # fn_logger = logging.getLogger(__MODULE__ + ".build_recent_lists")
     fn_logger.info("Generating playlist(s) for recent items . . .")
     os.chdir(_music_dir)
     playlist_dir = Path(".Playlists")
 
-    # Set parameter for database query
+    # Set parameters for database query
     file_prefix = expanduser("~/Music/%")
     list_size = 25
     list_type = "last"
@@ -132,11 +194,11 @@ def build_recent_lists(list_date: pendulum.date) -> None:
     min_play_secs = 30
     playlist_filename = playlist_dir / f"{list_name}.m3u"
     linkname = playlist_filename.name
-    fn_logger.info(f"Generating '{playlist_filename.name}'")
+    fn_logger.debug(f"Generating '{playlist_filename.name}'")
     # yesterday = (_run_dt - timedelta(days=1)).date()
     query_date = list_date - relativedelta(days=3)
     params = {
-        f"query_date": query_date,
+        "query_date": query_date,
         "list_size": list_size,
         "file_prefix": file_prefix,
         "min_play_secs": min_play_secs,
@@ -195,7 +257,7 @@ def build_recent_lists(list_date: pendulum.date) -> None:
 
 
 def build_top_lists(list_date: pendulum.date, force: bool) -> None:
-    fn_logger = logging.getLogger(__MODULE__ + ".build_top_lists")
+    # fn_logger = logging.getLogger(__MODULE__ + ".build_top_lists")
     playlists = which_lists(list_date)
     os.chdir(_music_dir)
     playlist_dir = Path(".Playlists")
@@ -204,7 +266,7 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
         file_prefix = expanduser("~/Music/%")
         min_play_secs = 30
         for list_type in playlists.keys():
-            fn_logger.info(f"{list_date}: {list_type:7s} {playlists[list_type]}")
+            fn_logger.debug(f"{list_date}: {list_type:7s} {playlists[list_type]}")
             db_column = playlists[list_type]
             if list_type == "daily":
                 list_size = 10
@@ -267,7 +329,7 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
             # prev_filename = playlist_dir / list_type / f"{prev_name}_Top{list_size}.m3u"
             aliasname = f"{list_type.capitalize()}.m3u"
             prev_aliasname = f"Prev_{aliasname}"
-            fn_logger.info(f"Generating '{filename.name}'")
+            fn_logger.debug(f"Generating '{filename.name}'")
             make_playlist(filename, list_date, playlist, force)
             # Timestamp for playlist
             mtime = date_to_timestamp(list_date, end_of_day=True)
@@ -287,7 +349,7 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
             prev_filename = find_prev_filename(list_date, playlist_dir / list_type, countdown=True)
             aliasname = f"{list_type.capitalize()}_Countdown.m3u"
             prev_aliasname = f"Prev_{aliasname}"
-            fn_logger.info(f"Generating '{filename.name}'")
+            fn_logger.debug(f"Generating '{filename.name}'")
             make_playlist(filename, list_date, list(reversed(playlist)), force)
             for alias in [linkname, aliasname, prev_aliasname]:
                 if alias == prev_aliasname:
@@ -311,7 +373,7 @@ def date_to_timestamp(list_date: pendulum.date, end_of_day: bool=False) -> float
 
 
 def do_backup(pathname: str | Path, max_backups: int = 10) -> str | None:
-    fn_logger = logging.getLogger(__MODULE__ + ".do_backup")
+    # fn_logger = logging.getLogger(__MODULE__ + ".do_backup")
     backupname = None
     if not exists(pathname):
         fn_logger.error(f"File Not Found: {pathname}")
@@ -323,7 +385,7 @@ def do_backup(pathname: str | Path, max_backups: int = 10) -> str | None:
     if backups:
         last_backup = max(backups, key=getmtime)
         if mtime > getmtime(last_backup):
-            num = last_backup.split("~")[-1].rstrip(".")
+            num = last_backup.split("~")[-1].rstrip(".").lstrip(".")
             if num == "":
                 num = 0
             else:
@@ -333,7 +395,7 @@ def do_backup(pathname: str | Path, max_backups: int = 10) -> str | None:
             perform_backup = False
     if perform_backup:
         backupname = f"{pathname}{suffix}"
-        fn_logger.info(f"Backup: {backupname}")
+        fn_logger.debug(f"Backup: {backupname}")
         shutil.copy(pathname, backupname)
         os.utime(backupname, times=(mtime, mtime))
     return backupname
@@ -354,12 +416,12 @@ def find_prev_filename(list_date: pendulum.date, playlist_dir: str | Path, count
                      and "Countdown" in x.name
                      and getmtime(x.path) < list_ts]
     prev_list = max(playlists, key=getmtime)
-    print(prev_list.path)
+    fn_logger.debug(f"Previous List: {prev_list.path}")
     return prev_list.path
 
 
 def make_aliases_old():
-    fn_logger = logging.getLogger(__MODULE__ + ".make_aliases")
+    # fn_logger = logging.getLogger(__MODULE__ + ".make_aliases")
     # Change to Music directory in order to have relative symlinks to playlists
     # yesterday_ts = _yesterday_dt.timestamp()
     os.chdir(_music_dir)
@@ -396,7 +458,7 @@ def make_aliases_old():
             linkname = f"{period}_{list_name}.m3u"
             """if lexists(linkname):
                 if mtime > getmtime(linkname):
-                    fn_logger.info(f"Removing symlink: {linkname}")
+                    fn_logger.debug(f"Removing symlink: {linkname}")
                     os.unlink(linkname)
                 else:
                     continue"""
@@ -414,7 +476,7 @@ def make_playlist(
     if exists(filename):
         if force:
             backupname = do_backup(filename)
-            fn_logger.info(f"Forcing new playlist, removing '{filename}'")
+            fn_logger.debug(f"Forcing new playlist, removing '{filename}'")
             os.remove(filename)
             do_nothing()
         elif mtime <= getmtime(filename):
@@ -435,7 +497,7 @@ def make_playlist(
 
 
 def make_symlink(filename, linkname, overwrite=False, times=None):
-    fn_logger = logging.getLogger(__MODULE__ + ".make_symlink")
+    # fn_logger = logging.getLogger(__MODULE__ + ".make_symlink")
     msg = "Creating"
     # Remove symlink, if orphaned
     if not exists(filename) and lexists(linkname):
@@ -447,7 +509,7 @@ def make_symlink(filename, linkname, overwrite=False, times=None):
                 msg = "Updating"
                 os.unlink(linkname)
     if not lexists(linkname):
-        fn_logger.info(f"{msg} symlink: {linkname}")
+        fn_logger.debug(f"{msg} symlink: {linkname}")
         os.symlink(filename, linkname)
         if times:
             os.utime(linkname, times=times, follow_symlinks=False)

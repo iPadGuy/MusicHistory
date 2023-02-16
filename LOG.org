@@ -5,6 +5,27 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Thursday, February 16, 2023
+:LOGBOOK:
+CLOCK: [2023-02-16 Thu 03:15]--[2023-02-16 Thu 04:00] =>  0:45
+:END:
+** Dusty Playlists
+- I did this in the database, instead of in Python
+*** Alembic
+- I am seriously thinking that Alembic is more of a hindrance than a help
+- I probably need to explore just using it for version control, without the object models
+* Tuesday, December 27, 2022
+:LOGBOOK:
+CLOCK: [2022-12-27 Tue 05:15]--[2022-12-27 Tue 07:15] =>  2:00
+:END:
+** Migration to ~pendulum~
+- User installation of ~pendulum~ (~build_playlists~ crashed, overnight)
+** Favourite Artists / Directories
+- I created a scratch file for this, ~popular_artists_1.py~
+- ~2021_Top500.m3u~ was used to create the first playlist, ~~/Music/.Playlists/yearly/2021_TopDirs.m3u~
+*** Skipped Songs
+- So far, I've found one Bee Gees song
+
 * Saturday, December 24, 2022
 :LOGBOOK:
 CLOCK: [2022-12-24 Sat 14:45]--[2022-12-24 Sat 16:15] =>  1:30
