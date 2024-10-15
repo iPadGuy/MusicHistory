@@ -470,3 +470,6 @@ compile_commands.json
 /data_dir
 /log_dir
 /Playlists
+
+# DBeaver
+dbeaver/.dbeaver

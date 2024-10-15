@@ -3,7 +3,7 @@
 # log_extractor - Friday, May 27, 2022
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.5.20-dev2"
+__version__ = "0.5.21-dev0"
 
 import builtins, lzma, os, re, shutil, sys, tarfile
 from datetime import datetime, timedelta, timezone
@@ -14,7 +14,7 @@ from time import sleep
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy import create_engine
-from tabulate import tabulate
+# from tabulate import tabulate
 from xdg import XDG_DATA_HOME, XDG_CONFIG_HOME
 
 appname = "MusicHistory"
@@ -106,10 +106,25 @@ def main():
 			summary_mtime = summaryfilename.stat().st_mtime
 			summary_dt = datetime.fromtimestamp(summary_mtime).astimezone()
 
+			""" 2024-Oct-15 PAL - FutureWarning for Pandas 3.0
+			OLD:
+
+			df["col"][row_indexer] = value
+
+			NEW:
+
+			df.loc[row_indexer, "col"] = values
+			"""
+			""" Old:
 			# Prevent 'SettingWithCopyWarning' message from appearing
 			pd.options.mode.chained_assignment = None
 			df["play_secs"].iloc[-1] = summary_mtime - df["epochtime"].iloc[-1]
 			df["play_time"].iloc[-1] = summary_dt - df["playdatetime"].iloc[-1]
+			df["play_time"] = df["play_time"].astype(str)
+			"""
+			df.iloc[-1, "play_secs"] = summary_mtime - df["epochtime"].iloc[-1]
+			df.iloc[-1, "play_time"] = summary_mtime - df["playdatetime"].iloc[-1]
+
 			df["play_time"] = df["play_time"].astype(str)
 
 			# See if epochtimes already exist
@@ -151,8 +166,8 @@ def extract_loginfo(logdir: str | Path, summaryfilename: str | Path, tarfilename
 	last_mtime = -1
 	# 2022-12-07 PAL - Switching from glob() to scandir() - BEGIN
 	log_filenames = [x for x in os.scandir(logdir)
-	                 if x.is_file() 
-	                 and x.name.startswith("smplayer") 
+	                 if x.is_file()
+	                 and x.name.startswith("smplayer")
 	                 and x.name.endswith(".log")]
 	log_filenames = sorted(log_filenames, key=getmtime)
 	last_filename = log_filenames[-1]
@@ -209,7 +224,7 @@ def extract_loginfo(logdir: str | Path, summaryfilename: str | Path, tarfilename
 			df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
 			if Config.SAVE_SUMMARIES:
 				# Save to tab-delimited file
-				df.to_csv(summaryfilename, "\t", header=columns, index=False)
+				df.to_csv(summaryfilename, sep="\t", header=columns, index=False)
 				os.utime(summaryfilename, times=(last_mtime, last_mtime))
 				os.utime(logdir, times=(last_mtime, last_mtime))
 	return df

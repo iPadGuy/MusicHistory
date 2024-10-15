@@ -13,8 +13,8 @@ psycopg2 = "*"
 click = "*"
 oyaml = "*"
 coloredlogs = "*"
-# musichistory = {editable = true, path = "."}
 musichistory = {editable = true, path = "."}
+pendulum = "*"
 
 [dev-packages]
 tabulate = "*"

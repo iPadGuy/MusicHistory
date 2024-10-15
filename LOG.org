@@ -1,17 +1,27 @@
 #+TITLE:	Music History
 #+SUBTITLE:	Log
 #+OPTIONS:	toc:nil num:nil
-#+STARTUP:	indent show2levels
+#+STARTUP:	indent showlevels
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Tuesday, October 15, 2024
+** Broken Programs
+*** ~log_extractor~
+**** Pandas 3.0
+*** ~buiild_playlists~
+**** SQLAlchemy 2.0.35
 * Thursday, February 16, 2023
 :LOGBOOK:
+CLOCK: [2023-02-16 Thu 07:30]--[2023-02-16 Thu 09:15] =>  1:45
 CLOCK: [2023-02-16 Thu 03:15]--[2023-02-16 Thu 04:00] =>  0:45
 :END:
 ** Dusty Playlists
 - I did this in the database, instead of in Python
-*** Alembic
+*** ~build_dusty_lists()~
+- Added logic for three lists, with 25, 40, and 100 items
+- Added logic for missing files (I thought I took care of this with ~reconciledb~)
+** Alembic
 - I am seriously thinking that Alembic is more of a hindrance than a help
 - I probably need to explore just using it for version control, without the object models
 * Tuesday, December 27, 2022
