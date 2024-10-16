@@ -3,11 +3,17 @@
 # log_extractor - Friday, May 27, 2022
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.5.21-dev0"
+__version__ = "0.5.21-dev8"
 
-import builtins, lzma, os, re, shutil, sys, tarfile
+import builtins
+import lzma
+import os
+import re
+import shutil
+import sys
+import tarfile
 from datetime import datetime, timedelta, timezone
-from os.path import basename, dirname, getmtime, join
+from os.path import basename, dirname, getmtime
 from pathlib import Path
 from time import sleep
 
@@ -48,21 +54,29 @@ def main():
 			logdir = Path(date_id)
 			##### 2022-12-06 PAL - Merge Log Files - BEGIN
 			merged_filename = logdir / f"merged_{date_id}.log.xz"
-			logfiles = [f for f in os.scandir(logdir) if f.is_file()
-			            and f.name.startswith("smplayer")
-			            and f.name.endswith(".log")]
+			logfiles = [
+				f
+				for f in os.scandir(logdir)
+				if f.is_file()
+				and f.name.startswith("smplayer")
+				and f.name.endswith(".log")
+			]
 			if not logfiles:
 				continue
 			logfiles = sorted(logfiles, key=getmtime)
 			last_mtime = getmtime(logfiles[-1])
 			# Create merged file from the first uncompressed log file
-			with open(logfiles[0], "rb") as fin, lzma.open(merged_filename, "wb") as fout:
+			with open(logfiles[0], "rb") as fin, lzma.open(
+				merged_filename, "wb"
+			) as fout:
 				# Reads the file by chunks to avoid exhausting memory
 				shutil.copyfileobj(fin, fout)
 			total_count = 0
 			for i in range(0, len(logfiles) - 1):
 				j = i + 1
-				count = (find_new_lines(logfiles[i].path, logfiles[j].path, merged_filename))
+				count = find_new_lines(
+					logfiles[i].path, logfiles[j].path, merged_filename
+				)
 				total_count += count
 				do_nothing()
 			# Set modification time to that of the most recent log file
@@ -81,9 +95,18 @@ def main():
 				df = extract_loginfo(logdir, summaryfilename, tarfilename)
 			else:
 				print(f"Loading: '{summaryfilename}'")
-				df = pd.read_csv(summaryfilename, sep="\t", parse_dates=["playdatetime"])
+				df = pd.read_csv(
+					summaryfilename, sep="\t", parse_dates=["playdatetime"]
+				)
 			# Fetch last row from database
-			columns = ["epochtime", "playdate", "playdatetime", "filename", "play_secs", "play_time"]
+			columns = [
+				"epochtime",
+				"playdate",
+				"playdatetime",
+				"filename",
+				"play_secs",
+				"play_time",
+			]
 			cols = ", ".join(columns)
 			sql = f"SELECT {cols} FROM {tablename} ORDER BY epochtime DESC LIMIT 1;"
 			last_df = pd.read_sql_query(sql, con=engine)
@@ -100,9 +123,7 @@ def main():
 			# Drop last row (was added, above)
 			df.drop(0, inplace=True)
 
-			# Calculate play time for last row, mtime of summary file
-			# playdate = datetime.fromisoformat(df["playdatetime"].iloc[-1].isoformat()).astimezone().date()
-			# midnight = datetime.combine(playdate, datetime.max.time()).astimezone()
+			# Calculate play time for last row, using mtime of summary file
 			summary_mtime = summaryfilename.stat().st_mtime
 			summary_dt = datetime.fromtimestamp(summary_mtime).astimezone()
 
@@ -122,9 +143,8 @@ def main():
 			df["play_time"].iloc[-1] = summary_dt - df["playdatetime"].iloc[-1]
 			df["play_time"] = df["play_time"].astype(str)
 			"""
-			df.iloc[-1, "play_secs"] = summary_mtime - df["epochtime"].iloc[-1]
-			df.iloc[-1, "play_time"] = summary_mtime - df["playdatetime"].iloc[-1]
-
+			df.loc[df.index[-1], "play_secs"] = summary_mtime - df["epochtime"].iloc[-1]
+			df.loc[df.index[-1], "play_time"] = summary_dt - df["playdatetime"].iloc[-1]
 			df["play_time"] = df["play_time"].astype(str)
 
 			# See if epochtimes already exist
@@ -134,7 +154,9 @@ def main():
 			existing_df = pd.read_sql_query(sql, con=engine)
 			if not existing_df["epochtime"].empty:
 				df = df.loc[df["epochtime"] != existing_df["epochtime"]]"""
-			rows = df.to_sql(tablename, con=engine, schema=schema, if_exists="append", index=False)
+			rows = df.to_sql(
+				tablename, con=engine, schema=schema, if_exists="append", index=False
+			)
 			print(f"Added {rows} rows to database")
 			do_nothing()
 	return
@@ -156,7 +178,9 @@ def do_nothing():
 	pass
 
 
-def extract_loginfo(logdir: str | Path, summaryfilename: str | Path, tarfilename: str | Path) -> pd.DataFrame:
+def extract_loginfo(
+	logdir: str | Path, summaryfilename: str | Path, tarfilename: str | Path
+) -> pd.DataFrame:
 	df = None
 	csvlines = []
 	seen_lines = []
@@ -165,10 +189,11 @@ def extract_loginfo(logdir: str | Path, summaryfilename: str | Path, tarfilename
 	# log_dir = _data_dir / date_id
 	last_mtime = -1
 	# 2022-12-07 PAL - Switching from glob() to scandir() - BEGIN
-	log_filenames = [x for x in os.scandir(logdir)
-	                 if x.is_file()
-	                 and x.name.startswith("smplayer")
-	                 and x.name.endswith(".log")]
+	log_filenames = [
+		x
+		for x in os.scandir(logdir)
+		if x.is_file() and x.name.startswith("smplayer") and x.name.endswith(".log")
+	]
 	log_filenames = sorted(log_filenames, key=getmtime)
 	last_filename = log_filenames[-1]
 	last_mtime = getmtime(last_filename)
@@ -185,18 +210,25 @@ def extract_loginfo(logdir: str | Path, summaryfilename: str | Path, tarfilename
 							parts = line.split()
 							timepart = parts[0].lstrip("[").rstrip("]")
 							hh, mm, ss, ms = [int(x) for x in timepart.split(":")]
-							play_dt = datetime(log_year, log_month, log_day, hh, mm, ss, ms).astimezone()
+							play_dt = datetime(
+								log_year, log_month, log_day, hh, mm, ss, ms
+							).astimezone()
 							play_date = play_dt.date()
 							filename = " ".join(parts[3:-2]).strip('"')
 							csvlines.append(
-								(play_dt.timestamp(), play_date, play_dt.isoformat(" "), filename)
+								(
+									play_dt.timestamp(),
+									play_date,
+									play_dt.isoformat(" "),
+									filename,
+								)
 							)
 							seen_lines.append(line)
 			# Compress log file
 			# lzfilename = f"{log_filename}.xz"
 			# with open(log_filename, "rb") as fin, lzma.open(lzfilename, "wb") as fout:
-				# Reads the file by chunks to avoid exhausting memory
-			#	shutil.copyfileobj(fin, fout)
+			# Reads the file by chunks to avoid exhausting memory
+			# 	shutil.copyfileobj(fin, fout)
 			# sleep(0.1)
 			# Set modification time to that of the last log file
 			# mtime = os.path.getmtime(log_filename)
@@ -239,7 +271,9 @@ def fetch_last_playdatetime() -> datetime:
 	return playdatetime
 
 
-def find_new_lines(older_filename: str | Path, newer_filename: str | Path, merged_filename: str | Path) -> int:
+def find_new_lines(
+	older_filename: str | Path, newer_filename: str | Path, merged_filename: str | Path
+) -> int:
 	new_lines = []
 	lines_to_compare = 100
 	# Get the correct open() function
@@ -252,8 +286,7 @@ def find_new_lines(older_filename: str | Path, newer_filename: str | Path, merge
 	else:
 		open2 = builtins.open
 
-	with open1(older_filename, "rt") as f1, \
-			open2(newer_filename, "rt") as f2:
+	with open1(older_filename, "rt") as f1, open2(newer_filename, "rt") as f2:
 		lines1 = f1.readlines()
 		lines2 = f2.readlines()
 		line_count1 = len(lines1)

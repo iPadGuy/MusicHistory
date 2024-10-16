@@ -5,6 +5,10 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Wednesday, October 16, 2024
+** Broken Programs, Round Two
+*** ~log_extractor~
+- Can finally assign DataFrame slices
 * Tuesday, October 15, 2024
 ** Broken Programs
 *** ~log_extractor~
