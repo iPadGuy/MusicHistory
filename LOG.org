@@ -5,6 +5,22 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Tuesday, December 10, 2024
+** Broken Programs, Round Three
+*** ~log_extractor~
+- Pandas isn't importing dates that don't contain milliseconds
+  #+begin_example python
+  File "/home/patrick/bin/log_extractor", line 95, in main
+    df = extract_loginfo(logdir, summaryfilename, tarfilename)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrick/bin/log_extractor", line 255, in extract_loginfo
+    df["playdatetime"] = pd.to_datetime(df["playdatetime"])
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  ValueError: time data "2024-12-09 09:00:42-05:00" doesn't match format "%Y-%m-%d %H:%M:%S.%f%z", at position 51. You might want to try:
+    - passing `format` if your strings have a consistent format;
+    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;
+    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this
+  #+end_example
 * Wednesday, October 16, 2024
 ** Broken Programs, Round Two
 *** ~log_extractor~
