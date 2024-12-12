@@ -3,7 +3,7 @@
 # log_extractor_2 - Tuesday, December 10, 2024
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.6.30-dev6"
+__version__ = "0.6.30-dev9"
 
 import builtins
 import lzma
@@ -55,6 +55,7 @@ def main():
 			logdir = Path(date_id)
 			##### 2022-12-06 PAL - Merge Log Files - BEGIN
 			merged_filename = logdir / f"merged_{date_id}.log.xz"
+			playinfo_filename = logdir / f"playinfo_{date_id}.csv.xz"
 			logfiles = [
 				f for f in os.scandir(logdir) if f.is_file()
 					and f.name.startswith("smplayer")
@@ -65,28 +66,27 @@ def main():
 
 			if playinfo_filename.exists() and not logfiles:
 				continue
-			# elif logfiles:
-			# 	logfiles = sorted(logfiles, key=getmtime)
-			# 	last_mtime = getmtime(logfiles[-1])
-			# 	if not merged_filename.exists():
-			# 		# Create merged file from the first uncompressed log file
-			# 		with open(logfiles[0], "rb") as fin, lzma.open(
-			# 			merged_filename, "wb"
-			# 		) as fout:
-			# 			# Reads the file by chunks to avoid exhausting memory
-			# 			shutil.copyfileobj(fin, fout)
-			# 	total_count = 0
-			# 	for i in range(0, len(logfiles) - 1):
-			# 		j = i + 1
-			# 		count = find_new_lines(
-			# 			logfiles[i].path, logfiles[j].path, merged_filename
-			# 		)
-			# 		total_count += count
-			# 		do_nothing()
-			# 	# Set modification time to that of the most recent log file
-			# 	os.utime(merged_filename, times=(last_mtime, last_mtime))
+			elif logfiles:
+				logfiles = sorted(logfiles, key=getmtime)
+				last_mtime = getmtime(logfiles[-1])
+				if not merged_filename.exists():
+					# Create merged file from the first uncompressed log file
+					with open(logfiles[0], "rb") as fin, lzma.open(
+						merged_filename, "wb"
+					) as fout:
+						# Reads the file by chunks to avoid exhausting memory
+						shutil.copyfileobj(fin, fout)
+				total_count = 0
+				for i in range(0, len(logfiles) - 1):
+					j = i + 1
+					count = find_new_lines(
+						logfiles[i].path, logfiles[j].path, merged_filename
+					)
+					total_count += count
+					do_nothing()
+				# Set modification time to that of the most recent log file
+				os.utime(merged_filename, times=(last_mtime, last_mtime))
 			# ToDo: Replace summaryfilename and extract_loginfo()
-			playinfo_filename = logdir / f"playinfo_{date_id}.csv.xz"
 			##### 2022-12-06 PAL - Merge Log Files - END
 
 			# summaryfilename = logdir / f"summary_{date_id}.csv.xz"
@@ -294,7 +294,7 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 	# dd = int(date_id[6:8])
 
 	for il in info_lines:
-		print(il)
+		# print(il)
 		parts = il.split()
 		timepart = parts[0].lstrip("[").rstrip("]")
 		h, m, s, ms = [int(x) for x in timepart.split(":")]
