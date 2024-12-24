@@ -5,6 +5,27 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Tuesday, December 24, 2024
+** Duplicate Play Times?
+#+begin_example python
+Run Start: log_extractor v0.6.30-dev10 2024-12-24 00:00:00-05:00
+Processing: 2024-12-23 . . .
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2118, in _exec_insertmany_context
+    dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint "ix_media_library_dt_playhistory_epochtime"
+DETAIL:  Key (epochtime)=(1734973288.000772) already exists.
+#+end_example
+*** Cause: Concatenated DataFrames
+#+begin_example python
+df = pd.concat([last_df, df], ignore_index=True)
+#+end_example
+*** Solution: de-duplicate the DataFrame
+#+begin_example python
+df.drop_duplicates(subset=["epochtime"], inplace=True)
+#+end_example
 * Tuesday, December 10, 2024
 ** Broken Programs, Round Three
 *** ~log_extractor~

@@ -3,7 +3,7 @@
 # log_extractor_2 - Tuesday, December 10, 2024
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.6.30-dev9"
+__version__ = "0.6.30-dev13"
 
 import builtins
 import lzma
@@ -115,6 +115,7 @@ def main():
 
 			# Merge last row from database
 			df = pd.concat([last_df, df], ignore_index=True)
+			df.drop_duplicates(subset=["epochtime"], inplace=True)
 
 			# Calculate durations / play times
 			df["play_secs"] = df.shift(-1)["epochtime"] - df["epochtime"]
@@ -266,10 +267,10 @@ def extract_loginfo_old(
 
 
 def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, playinfofilename: str | Path) -> pd.DataFrame:
-	print(f"Play Date:  . . . . . . {play_date}")
-	print(f"Log Filename  . . . . . {merged_filename}")
-	print(f"PlayInfo Filename . . . {playinfofilename}")
-
+	# print(f"Play Date:  . . . . . . {play_date}")
+	# print(f"Log Filename  . . . . . {merged_filename}")
+	# print(f"PlayInfo Filename . . . {playinfofilename}")
+	#
 	# Extract media & time information from merged log file
 	log_regex = r"Core::startMplayer: file:"
 
@@ -279,13 +280,13 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 		open = builtins.open
 	with open(merged_filename, "rt") as logfile:
 		lines = [x.rstrip() for x in logfile.readlines()]
-	print(f"Line Count: {len(lines)}  {merged_filename}")
+	# print(f"Line Count: {len(lines)}  {merged_filename}")
 	info_lines = [x for x in lines if re.search(log_regex, x)]
-	print(f"Info Lines: {len(info_lines)}  {merged_filename}")
+	# print(f"Info Lines: {len(info_lines)}  {merged_filename}")
 
 	csv_rows = []
 	date_id = play_date.strftime("%Y%m%d")
-	print(f"Date ID: {date_id}")
+	# print(f"Date ID: {date_id}")
 	yr = play_date.year
 	mo = play_date.month
 	d = play_date.day
