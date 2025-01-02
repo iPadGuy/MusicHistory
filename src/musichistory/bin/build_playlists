@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # build_playlists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.8.35-dev6"
+__version__ = "0.9.36-dev4"
 
 import click, coloredlogs, logging, os, pendulum, shutil, sys, time
 import sqlalchemy as sa
@@ -110,7 +110,7 @@ def build_query(db_column: str) -> str:
 
 	frm = " ".join(
 		[
-			f"{tablename} dpt",
+			f"{_table_name} dpt",
 			"INNER JOIN dim_date dd",
 			"ON dpt.playdate = dd.date_id",
 		]
@@ -119,6 +119,7 @@ def build_query(db_column: str) -> str:
 		f"dd.{db_column} = :list_date",
 		"dpt.play_secs > :min_play_secs",
 		"dpt.filename LIKE :file_prefix",
+		"dpt.filename NOT LIKE :christmas_prefix",
 	]
 	whr = " AND ".join(ands)
 	grp = "dpt.filename HAVING count(*) > 1"
@@ -319,35 +320,38 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
 		for list_type in playlists.keys():
 			fn_logger.debug(f"{list_date}: {list_type:7s} {playlists[list_type]}")
 			db_column = playlists[list_type]
+			christmas_prefix = expanduser("~/Music/Christmas/%")
 			if list_type == "daily":
 				list_size = 10
 				list_name = list_date.strftime("%A")
-				# prev_name = (list_date - relativedelta(days=1)).strftime("%A")
 			elif list_type == "weekly":
 				list_size = 40
 				list_name = list_date.strftime("%Y-W%U")
-				# prev_name = (list_date - relativedelta(weeks=1)).strftime("%Y-W%U")
+				if list_date.month == 12:
+					christmas_prefix = ""
 			elif list_type == "monthly":
 				list_size = 100
 				list_name = list_date.strftime("%Y-%m-%B")
-				# prev_name = (list_date - relativedelta(months=1)).strftime("%Y-%m-%B")
+				if list_date.month == 12:
+					christmas_prefix = ""
 			elif list_type == "quarterly":
 				list_size = 250
 				quarter = int(list_date.month / 3)
 				prev_date = list_date - relativedelta(months=3)
 				prev_quarter = int(prev_date.month / 3)
 				list_name = list_date.strftime(f"%Y-Q{quarter}")
-				# prev_name = prev_date.strftime(f"%Y-Q{prev_quarter}")
 			elif list_type == "yearly":
 				list_size = 500
 				list_name = list_date.strftime("%Y")
-				# prev_name = (list_date - relativedelta(years=1)).strftime("%Y")
 			else:
 				raise ValueError(f"Uknown list type: {list_type}")
+			if list_date.month == 12 and list_date.day < 31:
+				christmas_prefix = ""
 			params = {
 				f"list_date": list_date,
 				"list_size": list_size,
 				"file_prefix": file_prefix,
+				"christmas_prefix": christmas_prefix,
 				"min_play_secs": min_play_secs,
 			}
 			# fn_logger.info(f"Parameters: {params}")
@@ -628,7 +632,7 @@ if __name__ == "__main__":
 	_data_dir = Config.DATA_DIR
 	_music_dir = Config.MUSIC_DIR
 	# _playlist_dir = Config.PLAYLIST_DIR
-	tablename = Config.TABLE_NAME
+	_table_name = Config.TABLE_NAME
 
 	# Configure List Types
 	_list_types = Config.LIST_TYPES

@@ -5,6 +5,18 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Thursday, January 2, 2025
+** Christmas Songs in Playlists
+- Introduced ~christmas_prefix~ and ~NOT LIKE~ condition to the ~WHERE~ clause
+- ~christmas_prefix~ is set to an empty string from December 1st through 30th
+- Re-run ~build_playlists~ for December 31st
+** Promote Database
+- From ~developmentdb~ to ~patrick~
+  #+begin_example shell
+  pg_dump -d developmentdb --schema=media_library | psql -d patrick
+  #+end_example
+** Promote Environment to Production
+- Remove ~APP_CONFIG~ variable from ~.env~ file
 * Tuesday, December 24, 2024
 ** Duplicate Play Times?
 #+begin_example python
@@ -50,7 +62,7 @@ df.drop_duplicates(subset=["epochtime"], inplace=True)
 ** Broken Programs
 *** ~log_extractor~
 **** Pandas 3.0
-*** ~buiild_playlists~
+*** ~build_playlists~
 **** SQLAlchemy 2.0.35
 * Thursday, February 16, 2023
 :LOGBOOK:
