@@ -3,7 +3,7 @@
 # log_extractor_2 - Tuesday, December 10, 2024
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.6.30-dev13"
+__version__ = "0.6.30-dev15"
 
 import builtins
 import lzma
@@ -13,7 +13,7 @@ import shutil
 import sys
 import tarfile
 from datetime import datetime, timedelta, timezone
-from os.path import basename, dirname, getmtime
+from os.path import basename, dirname, getmtime, getsize
 from pathlib import Path
 from time import sleep
 
@@ -53,6 +53,12 @@ def main():
 			process_date = start_date + i * day_delta
 			date_id = process_date.strftime("%Y%m%d")
 			logdir = Path(date_id)
+			##### 2025-02-21 PAL - Remove empty log files - BEGIN
+			for entry in [x for x in os.scandir(logdir) if x.is_file()]:
+				if getsize(entry.path) == 0:
+					os.remove(entry.path)
+			##### 2025-02-21 PAL - Remove empty log files - END
+
 			##### 2022-12-06 PAL - Merge Log Files - BEGIN
 			merged_filename = logdir / f"merged_{date_id}.log.xz"
 			playinfo_filename = logdir / f"playinfo_{date_id}.csv.xz"
@@ -352,7 +358,11 @@ def find_new_lines(
 
 	with open1(older_filename, "rt") as f1, open2(newer_filename, "rt") as f2:
 		lines1 = f1.readlines()
+		if not lines1:
+			do_nothing()
 		lines2 = f2.readlines()
+		if not lines2:
+			do_nothing()
 		line_count1 = len(lines1)
 		line_count2 = len(lines2)
 		if line_count2 > line_count1:

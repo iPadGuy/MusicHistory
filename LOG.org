@@ -1,10 +1,14 @@
 #+TITLE:	Music History
 #+SUBTITLE:	Log
 #+OPTIONS:	toc:nil num:nil
-#+STARTUP:	indent showlevels
+#+STARTUP:	indent show3levels
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Friday, February 21, 2025
+** Empty Log Files
+- ~log_extractor~ throwing errors
+- Add logic to remove empty log files
 * Thursday, January 2, 2025
 ** Christmas Songs in Playlists
 - Introduced ~christmas_prefix~ and ~NOT LIKE~ condition to the ~WHERE~ clause
