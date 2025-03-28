@@ -5,6 +5,41 @@
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Tuesday, March 18, 2025
+** Research:
+*** Top Ten Playlist Experiments
+- Skipping songs (Next)
+- Repeating songs (Prev)
+- Clicking on songs in playlist
+- Filtering songs (Playlist Search Bar)
+- Playlist stopped on its own
+- Clicked Stop button when nothing was playing
+*** Examining Log Files
+**** Useful Descriptors
+- *Core::startMplayer file:* - Timestamp and name of file starting to play
+- *Core::stopMplayer* - Timestamp of when current file was stopped
+- *Playlist::Item* - Timestamp and name of file being played automatically (ie. in a playlist)
+*** Log Files
+**** Today
+- *First:* ~data_dir/20250318/smplayer_032118.log~
+- *End of Top 10 Playlist Experiments:* ~data_dir/20250318/smplayer_043424.log~
+** Results
+- Able to calculate play duration from log files, instead of relying on Pandas
+** Action Items
+*** Database
+- Add column for date/time of when play stopped for a song
+- Drop calculated columns that use the stop date/time (ie. ~play_secs~ and ~play_time~)
+*** Log Files
+- Reprocess old log files to create new table (ie. ~dt_playhistory3~)
+
+* Monday, March 17, 2025
+** Issue: Incorrect ~play_secs~ and ~play_time~ values in ~dt_playhistory~
+- *Blame:* ~log_extractor~, line 140: ~playinfo_mtime = getmtime(playinfo_filename)~
+- *Cause:* Calculating ~play_secs~ for last item in log files being extracted
+- *Fix:* Find an event in the current log file
+** Issue: SQLAlchemy Doesn't Support "WHERE .. IN" Clauses
+- Workaround: Generate mutiple WHERE conditions with OR
+
 * Friday, February 21, 2025
 ** Empty Log Files
 - ~log_extractor~ throwing errors
@@ -259,7 +294,7 @@ CLOCK: [2022-12-05 Mon 04:00]--[2022-12-05 Mon 04:30] =>  0:30
 *** ~build_top_lists~
 - I fixed the cause of this, but ~Top40_2022-W48~ was the number on item is yesterday's Top 10 playlist, with 86 plays--SMPlayer evidently tried to play this when I loaded the list, yesterday
 - The database confirmed my suspicion that none of the play times (~play_secs~) exceeded three seconds, so I incorporated this into the logic for building Top XX lists, rather than deleting the entries
-- 
+-
 
 * Sunday, December 4, 2022
 :LOGBOOK:
@@ -405,7 +440,7 @@ CLOCK: [2022-11-27 Sun 05:00]--[2022-11-27 Sun 12:30] =>  7:30
 CLOCK: [2022-11-26 Sat 06:00]--[2022-11-26 Sat 10:00] =>  4:00
 :END:
 - More fiddling with ~dim_date~--I think I'm going to turn this into its own project
-  
+
 * Friday, November 25, 2022
 :LOGBOOK:
 CLOCK: [2022-11-25 Fri 17:15]--[2022-11-25 Fri 17:40] =>  0:25
@@ -439,7 +474,7 @@ CLOCK: [2022-11-22 Tue 05:00]--[2022-11-22 Tue 06:35] =>  1:35
 
 ** Python script: ~build_top_lists~ - Generates periodic Top XXX lists
 - Working on weekly, monthly, and yearly versions of the Top XXX list generator (without the looping)
-  
+
 * Monday, November 21, 2022
 :LOGBOOK:
 CLOCK: [2022-11-21 Mon 07:00]--[2022-11-21 Mon 12:32] =>  5:32
@@ -458,7 +493,7 @@ CLOCK: [2022-11-20 Sun 12:45]--[2022-11-20 Sun 13:10] =>  0:25
 CLOCK: [2022-11-02 Wed 07:54]--[2022-11-02 Wed 09:44] =>  1:50
 CLOCK: [2022-11-02 Wed 03:19]--[2022-11-02 Wed 04:54] =>  1:35
 :END:
-- It seems that the midnight run of ~log_analyzer~ failed because I forgot to install it, but 
+- It seems that the midnight run of ~log_analyzer~ failed because I forgot to install it, but
   * When I ran it manually, nothing happened
   * I had to delete the summary file, ~20221101.csv.xz~, in order for it to run
     + I want to eliminate the need for the CSV files, altogether
@@ -524,7 +559,7 @@ CLOCK: [2022-06-17 Fri 06:55]--[2022-06-17 Fri 07:22] =>  0:27
   * It doesn't work with the new log files, yet
   * I'm not sure how to add any of these as commands to the project, so that they will be installed, but that can come later
 - The CSV files have Unix timestamps, but Pandas ~to_datetime()~  function doesn't produce the correct date, so I will try it in the database, instead
-- Created baseline for ~developmentdb.media_library~ 
+- Created baseline for ~developmentdb.media_library~
 
 * Tuesday, June 14, 2022
 :LOGBOOK:
@@ -544,7 +579,7 @@ CLOCK: [2022-06-14 Tue 09:34]--[2022-06-14 Tue 11:02] =>  1:28
 ** DONE Next Steps
 *** DONE Create a baseline for the database
 *** DONE Bring commands over from ~MusicHistory_old~
-  
+
 * Monday, June 13, 2022
 :LOGBOOK:
 CLOCK: [2022-06-13 Mon 20:07]--[2022-06-13 Mon 22:11] =>  2:04

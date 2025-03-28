@@ -4,6 +4,8 @@
 *.so
 *.cfg
 *.tar.*
+*.tgz
+*.txz
 *.xz
 !.isort.cfg
 !setup.cfg
@@ -347,6 +349,7 @@ celerybeat.pid
 .env
 .venv
 env/
+environment
 venv/
 ENV/
 env.bak/
@@ -469,6 +472,7 @@ compile_commands.json
 /config_dir
 /data_dir
 /log_dir
+/state_dir
 /Playlists
 
 # DBeaver

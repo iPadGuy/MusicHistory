@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # build_playlists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.9.36-dev4"
+__version__ = "0.10.37-dev0"
 
 import click, coloredlogs, logging, os, pendulum, shutil, sys, time
 import sqlalchemy as sa
@@ -26,11 +26,11 @@ from os.path import (
 from pathlib import Path
 from sqlalchemy import create_engine
 from time import sleep
-from xdg import XDG_CONFIG_HOME
+from xdg_base_dirs import xdg_config_home
 
 appname = "MusicHistory"
 basedir = os.path.dirname(os.path.dirname(__file__))
-config_dir = XDG_CONFIG_HOME
+config_dir = xdg_config_home()
 if not config_dir:
 	config_dir = os.path.expanduser("~/.config")
 if appname:
