@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # build_playlists - Tuesday, November 22, 2022
 """ This replaces top_daily_lists, builds weekly, monthly, and yearly lists """
-__version__ = "0.10.37-dev0"
+__version__ = "0.11.41-dev1"
 
 import click, coloredlogs, logging, os, pendulum, shutil, sys, time
 import sqlalchemy as sa
@@ -54,13 +54,12 @@ __MODULE__ = Path(__file__).resolve().stem
 	help="Force playlists to be written (overwrite)",
 )
 def main(list_date, force):
-	# fn_logger = logging.getLogger(__MODULE__ + ".main")
-
 	fn_logger.debug(f"List Date: {list_date}")
 	yesterday = pendulum.yesterday().date()
-	# yesterday = (_run_dt - timedelta(days=1)).date()
 	if list_date.lower() in ["today", "yesterday"]:
 		list_date = yesterday
+	# elif list_date.lower() == "rebuild":
+	# 	rebuild()
 	else:
 		try:
 			list_date = parse(list_date).date()
@@ -73,15 +72,18 @@ def main(list_date, force):
 	build_top_lists(list_date, force)
 	if list_date == yesterday:
 		build_recent_lists(list_date)
-		build_dusty_lists(list_date)
+		# 2025-Apr-11 PAL - Disabling this during transition to new dt_playhistory
+		# build_dusty_lists(list_date)
 	return
 
 
 def init():
-	# fn_logger = logging.getLogger(__MODULE__ + ".init")
 	fn_logger.debug(
 		f"{__MODULE__} v{__version__} Run Start: {_run_dt.format(_datefmt)}"
 	)
+	if not exists(_playlist_dir):
+		for d in "daily weekly monthly quarterly yearly".split():
+			os.makedirs(join(_playlist_dir, d))
 	return
 
 
@@ -95,6 +97,10 @@ def eoj():
 		f"Run Stop: {stop_dt.format(_datefmt)}  Duration: {duration.as_timedelta()}"
 	)
 	return
+
+
+def do_nothing():
+	pass
 
 
 def build_query(db_column: str) -> str:
@@ -144,14 +150,14 @@ def build_dusty_lists(list_date: pendulum.date) -> None:
 	"""
 	fn_logger.info('Generating playlist(s) for "dusty" items . . .')
 	os.chdir(_music_dir)
-	playlist_dir = Path(".Playlists")
+	# playlist_dir = Path(".Playlists3")
 
 	# Set parameters for database query
 	list_type = "dusty"
 	list_sizes = [25, 40, 100]
 	for list_size in list_sizes:
 		list_name = f"{list_type.capitalize()}{list_size}"
-		playlist_filename = playlist_dir / f"{list_name}.m3u"
+		playlist_filename = _playlist_dir / f"{list_name}.m3u"
 		linkname = playlist_filename.name
 		fn_logger.debug(f"Generating '{playlist_filename.name}'")
 		params = {
@@ -194,7 +200,7 @@ def build_dusty_lists(list_date: pendulum.date) -> None:
 			if mtime > old_playlist_mtime:
 				fn_logger.info(f"Writing playlist to '{playlist_filename}'")
 				os.makedirs(os.path.dirname(playlist_filename), exist_ok=True)
-				with open(playlist_filename, "w") as pfile:
+				with open(playlist_filename, "wt") as pfile:
 					pfile.writelines([x + "\n" for x in playlist])
 				sleep(0.1)
 				# Set mtime to list_date
@@ -205,7 +211,7 @@ def build_dusty_lists(list_date: pendulum.date) -> None:
 				)
 		if missing:
 			missing_count = len(missing)
-			missing_filename = playlist_dir / "NotFound.m3u"
+			missing_filename = _playlist_dir / "NotFound.m3u"
 			linkname = missing_filename.name
 			if exists(missing_filename):
 				with open(missing_filename, "r") as mfile_in:
@@ -216,7 +222,7 @@ def build_dusty_lists(list_date: pendulum.date) -> None:
 			fn_logger.warning(
 				f"Adding {missing_count} file(s) to '{missing_filename.name}' (Total: {total_missing_count})"
 			)
-			with open(missing_filename, "w") as mfile_out:
+			with open(missing_filename, "wt") as mfile_out:
 				mfile_out.writelines([x + "\n" for x in missing])
 			sleep(0.1)
 			# Set mtime to list_date
@@ -235,7 +241,7 @@ def build_recent_lists(list_date: pendulum.date) -> None:
 	# fn_logger = logging.getLogger(__MODULE__ + ".build_recent_lists")
 	fn_logger.info("Generating playlist(s) for recent items . . .")
 	os.chdir(_music_dir)
-	playlist_dir = Path(".Playlists")
+	# playlist_dir = Path(".Playlists3")
 
 	# Set parameters for database query
 	file_prefix = expanduser("~/Music/%")
@@ -243,7 +249,7 @@ def build_recent_lists(list_date: pendulum.date) -> None:
 	list_type = "last"
 	list_name = f"{list_type.capitalize()}{list_size}"
 	min_play_secs = 30
-	playlist_filename = playlist_dir / f"{list_name}.m3u"
+	playlist_filename = _playlist_dir / f"{list_name}.m3u"
 	linkname = playlist_filename.name
 	fn_logger.debug(f"Generating '{playlist_filename.name}'")
 	# yesterday = (_run_dt - timedelta(days=1)).date()
@@ -298,7 +304,7 @@ def build_recent_lists(list_date: pendulum.date) -> None:
 	if mtime > old_playlist_mtime:
 		fn_logger.info(f"Writing playlist to '{playlist_filename}'")
 		os.makedirs(os.path.dirname(playlist_filename), exist_ok=True)
-		with open(playlist_filename, "w") as pfile:
+		with open(playlist_filename, "wt") as pfile:
 			pfile.writelines([x + "\n" for x in playlist])
 		sleep(0.1)
 		# Set mtime to list_date
@@ -310,9 +316,9 @@ def build_recent_lists(list_date: pendulum.date) -> None:
 
 def build_top_lists(list_date: pendulum.date, force: bool) -> None:
 	# fn_logger = logging.getLogger(__MODULE__ + ".build_top_lists")
-	playlists = which_lists(list_date)
+	playlists = which_lists(list_date, force)
 	os.chdir(_music_dir)
-	playlist_dir = Path(".Playlists")
+	# playlist_dir = Path(".Playlists3")
 	if playlists:
 		# Set parameter for database query
 		file_prefix = expanduser("~/Music/%")
@@ -377,10 +383,10 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
 					playlist.append(filename)
 
 			# Make Playlist
-			filename = playlist_dir / list_type / f"{list_name}_Top{list_size}.m3u"
+			filename = _playlist_dir / list_type / f"{list_name}_Top{list_size}.m3u"
 			linkname = filename.name
 			# ToDo: need linknames for previous list and "ly" alias (at least alias)
-			prev_filename = find_prev_filename(list_date, playlist_dir / list_type)
+			prev_filename = find_prev_filename(list_date, _playlist_dir / list_type)
 			# prev_filename = playlist_dir / list_type / f"{prev_name}_Top{list_size}.m3u"
 			aliasname = f"{list_type.capitalize()}.m3u"
 			prev_aliasname = f"Prev_{aliasname}"
@@ -394,15 +400,16 @@ def build_top_lists(list_date: pendulum.date, force: bool) -> None:
 					src = prev_filename
 				else:
 					src = filename
-				make_symlink(src, alias, overwrite=True, times=(mtime, mtime))
+				if src:
+					make_symlink(src, alias, overwrite=True, times=(mtime, mtime))
 
 			# Make Countdown Playlist
 			filename = (
-				playlist_dir / list_type / f"{list_name}_Top{list_size}_Countdown.m3u"
+				_playlist_dir / list_type / f"{list_name}_Top{list_size}_Countdown.m3u"
 			)
 			linkname = filename.name
 			prev_filename = find_prev_filename(
-				list_date, playlist_dir / list_type, countdown=True
+				list_date, _playlist_dir / list_type, countdown=True
 			)
 			aliasname = f"{list_type.capitalize()}_Countdown.m3u"
 			prev_aliasname = f"Prev_{aliasname}"
@@ -480,55 +487,10 @@ def find_prev_filename(
 			and "Countdown" in x.name
 			and getmtime(x.path) < list_ts
 		]
-	prev_list = max(playlists, key=getmtime)
-	fn_logger.debug(f"Previous List: {prev_list.path}")
-	return prev_list.path
-
-
-def make_aliases_old():
-	# fn_logger = logging.getLogger(__MODULE__ + ".make_aliases")
-	# Change to Music directory in order to have relative symlinks to playlists
-	# yesterday_ts = _yesterday_dt.timestamp()
-	os.chdir(_music_dir)
-	playlist_dir = Path(".Playlists")
-	for list_type in _list_types:
-		list_dir = playlist_dir / list_type
-		# print(f"List Dir: {list_dir}")
-		playlists = sorted(
-			[
-				x
-				for x in glob(join(list_dir, "*.m3u"), recursive=False)
-				if getmtime(x) >= 0 and "YTD" not in x
-			],
-			key=getmtime,
-		)
-		for playlist in playlists:
-			mtime = getmtime(playlist)
-			listname = basename(playlist).rstrip(".m3u")
-			is_countdown = False
-			is_prev = False
-			list_name = period = None
-			parts = listname.split("_")
-			for part in parts:
-				if part.startswith("Top"):
-					list_name = part
-				elif part == "Countdown":
-					is_countdown = True
-				else:
-					period = part
-			# prefix = listname.split("_")[0]
-			if mtime < 0:
-				is_prev = True
-			# Relative to current directory (set to ~/Music, above)
-			linkname = f"{period}_{list_name}.m3u"
-			"""if lexists(linkname):
-				if mtime > getmtime(linkname):
-					fn_logger.debug(f"Removing symlink: {linkname}")
-					os.unlink(linkname)
-				else:
-					continue"""
-			make_symlink(playlist, linkname, overwrite=True, times=(mtime, mtime))
-	return
+	if playlists:
+		prev_list = max(playlists, key=getmtime).path
+		fn_logger.debug(f"Previous List: {prev_list}")
+	return prev_list
 
 
 def make_playlist(
@@ -550,7 +512,7 @@ def make_playlist(
 			return
 	fn_logger.info(f"Writing playlist to '{filename}'")
 	os.makedirs(os.path.dirname(filename), exist_ok=True)
-	with open(filename, "w") as pfile:
+	with open(filename, "wt") as pfile:
 		pfile.writelines([x + "\n" for x in playlist])
 	sleep(0.1)
 	# Set mtime to list_date
@@ -563,25 +525,26 @@ def make_playlist(
 
 def make_symlink(filename, linkname, overwrite=False, times=None):
 	# fn_logger = logging.getLogger(__MODULE__ + ".make_symlink")
-	msg = "Creating"
-	# Remove symlink, if orphaned
-	if not exists(filename) and lexists(linkname):
-		os.unlink(linkname)
-	elif lexists(linkname) and overwrite:
-		# Only overwrite older linknames
-		if realpath(filename) != realpath(linkname):
-			if os.stat(filename).st_mtime > os.lstat(linkname).st_mtime:
-				msg = "Updating"
-				os.unlink(linkname)
-	if not lexists(linkname):
-		fn_logger.debug(f"{msg} symlink: {linkname}")
-		os.symlink(filename, linkname)
-		if times:
-			os.utime(linkname, times=times, follow_symlinks=False)
+	if filename and linkname:
+		msg = "Creating"
+		# Remove symlink, if orphaned
+		if not exists(filename) and lexists(linkname):
+			os.unlink(linkname)
+		elif lexists(linkname) and overwrite:
+			# Only overwrite older linknames
+			if realpath(filename) != realpath(linkname):
+				if os.stat(filename).st_mtime > os.lstat(linkname).st_mtime:
+					msg = "Updating"
+					os.unlink(linkname)
+		if not lexists(linkname):
+			fn_logger.debug(f"{msg} symlink: {linkname}")
+			os.symlink(filename, linkname)
+			if times:
+				os.utime(linkname, times=times, follow_symlinks=False)
 	return
 
 
-def which_lists(list_date: pendulum.date) -> dict:
+def which_lists(list_date: pendulum.date, force: bool) -> dict:
 	playlists = dict()
 
 	# sql = f"SELECT * FROM dim_date WHERE date_id = :list_date;"
@@ -594,28 +557,43 @@ def which_lists(list_date: pendulum.date) -> dict:
 		do_nothing()
 	if rows:
 		datediff = (_run_dt.date() - list_date).days
-		if datediff <= 7:
+		if datediff <= 7 or force:
 			# Only generate daily playlists for the last week
 			playlists.update({"daily": "date_id"})
 		for period in ["week", "month", "quarter", "year"]:
-			if period == "week" and datediff > 100:
-				fn_logger.warning(
-					"Not generating weekly lists for dates more than three months ago"
-				)
-				continue
-			elif period == "month" and datediff > 366:
-				fn_logger.warning(
-					"Not generating monthly lists for dates more than a year ago"
-				)
-				continue
+			if not force:
+				if period == "week" and datediff > 100:
+					fn_logger.warning(
+						"Not generating weekly lists for dates more than three months ago"
+					)
+					continue
+				elif period == "month" and datediff > 366:
+					fn_logger.warning(
+						"Not generating monthly lists for dates more than a year ago"
+					)
+					continue
 			col = f"{period}_thru"
 			if rows[col] == list_date:
 				playlists.update({f"{period}ly": col})
 	return playlists
 
 
-def do_nothing():
-	pass
+def rebuild_old():
+	yesterday = pendulum.yesterday().date()
+	start_date = pendulum.date(2025, 1, 1)
+	# end_date = pendulum.yesterday().date()
+	# day_delta = timedelta(days=1)
+	# start_date.add(days=1)
+	os.chdir(_data_dir)
+	for i in range(0, (yesterday - start_date).days + 1):
+		list_date = start_date.add(days=i)
+		fn_logger.debug(f"Processing music history for {list_date}")
+		build_top_lists(list_date, force=True)
+		if list_date == yesterday:
+			build_recent_lists(list_date)
+			# The views for Dusty lists aren't in new_media_library
+			# build_dusty_lists(list_date)
+	return
 
 
 if __name__ == "__main__":
@@ -631,7 +609,7 @@ if __name__ == "__main__":
 	# Configure Directories
 	_data_dir = Config.DATA_DIR
 	_music_dir = Config.MUSIC_DIR
-	# _playlist_dir = Config.PLAYLIST_DIR
+	_playlist_dir = Config.PLAYLIST_DIR
 	_table_name = Config.TABLE_NAME
 
 	# Configure List Types
@@ -650,6 +628,7 @@ if __name__ == "__main__":
 	engine = create_engine(Config.DATABASE_URL)
 	schema = Config.DB_SCHEMA
 
+	# SET PosgreSQL search_path
 	@sa.event.listens_for(engine, "connect", insert=True)
 	def set_search_path(dbapi_connection, connection_record):
 		sql = f"SET SESSION search_path TO {schema},public;"

@@ -3,5 +3,5 @@
 %uri=git@github.com:iPadGuy/MusicHistory.git
 
 app_schema 2025-03-20T14:19:54Z Patrick <patrick@E5420> # App Schema
-dt_playhistory 2025-03-20T14:21:10Z Patrick <patrick@E5420> # Add Music History Table
-dt_playhistory3 2025-03-20T14:22:02Z Patrick <patrick@E5420> # Add Music History Table for Experiments
+dt_playhistory [app_schema] 2025-03-20T14:21:10Z Patrick <patrick@E5420> # Add Music History Table
+dd_playhistory [app_schema dt_playhistory] 2025-04-11T11:36:07Z Patrick <patrick29501@gmx.com> # Add view for date dimension with play history

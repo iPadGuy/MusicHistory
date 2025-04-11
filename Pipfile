@@ -15,12 +15,15 @@ coloredlogs = "*"
 musichistory = {editable = true, path = "."}
 pendulum = "*"
 xdg-base-dirs = "*"
+psutil = "*"
+loguru = "*"
 
 [dev-packages]
 tabulate = "*"
 black = "*"
 faker = "*"
 pendulum = "*"
+watchdog = "*"
 
 [requires]
 python_version = "3.12"

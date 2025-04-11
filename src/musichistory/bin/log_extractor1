@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
 # -*- coding: utf-8 -*-
-# log_extractor3 - Tuesday, March 18, 2025
+# log_extractor - Tuesday, December 10, 2024
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.7.00-dev34"
+__version__ = "0.7.31-dev01"
 
 import builtins
 import lzma
@@ -13,9 +13,7 @@ import shutil
 import sys
 import tarfile
 from datetime import datetime, timedelta, timezone
-from environs import Env
-from glob import glob
-from os.path import basename, dirname, getmtime, getsize, exists, join
+from os.path import basename, dirname, getmtime, getsize, exists
 from pathlib import Path
 from time import sleep
 
@@ -38,33 +36,12 @@ except ModuleNotFoundError:
 	raise ModuleNotFoundError("config.py")
 from config import Config  # noqa
 
-__module__ = Path(__file__).resolve().stem
+__MODULE__ = Path(__file__).resolve().stem
 
 
 def main():
-	process_date = (_run_dt - timedelta(days=1)).date()
-	date_id = process_date.strftime("%Y%m%d")
-	log_dir = _data_dir / date_id
-	print(f"Log Dir: {log_dir}")
-	merged_filename = log_dir / f"merged_{date_id}-test.log.xz"
-	merge_logs(log_dir, merged_filename)
-
-	playinfo_filename = log_dir / f"playinfo_{date_id}-test.csv.xz"
-
-	df = extract_playinfo(process_date, merged_filename, playinfo_filename)
-	print(df)
-
-	# ToDo: Add table dt_playhistory3
-	rows = df.to_sql("dt_playhistory3", con=engine, schema=schema,
-					 if_exists="append", index=False)
-	print(f"Added {rows} rows to database")
-
-	return
-
-
-def main_old():
 	# Under normal conditions, start_date should be at least two days ago
-	start_date = fetch_last_playdatetime_old().date()
+	start_date = fetch_last_playdatetime().date()
 	# start_date = datetime(2022, 12, 5).date()
 	# Since we're only processing complete days, end_date is yesterday
 	end_date = (_run_dt - timedelta(days=1)).date()
@@ -109,7 +86,7 @@ def main_old():
 				total_count = 0
 				for i in range(0, len(logfiles) - 1):
 					j = i + 1
-					count = find_new_lines_old(
+					count = find_new_lines(
 						logfiles[i].path, logfiles[j].path, merged_filename
 					)
 					total_count += count
@@ -198,7 +175,7 @@ def main_old():
 
 
 def init():
-	print(f"Run Start: {__module__} v{__version__} {_run_dt}")
+	print(f"Run Start: {__MODULE__} v{__version__} {_run_dt}")
 	return
 
 
@@ -213,17 +190,97 @@ def do_nothing():
 	pass
 
 
-# ToDo: Re-engineer dt_playhistory to include stop time and exclude calculated columns like play_secs and play_time
+def extract_loginfo_old(
+	logdir: str | Path, summaryfilename: str | Path, tarfilename: str | Path
+) -> pd.DataFrame:
+	df = None
+	csv_rows = []
+	seen_lines = []
+	# Extract media & time information from log files
+	log_regex = r"Core::startMplayer: file:"
+	# log_dir = _data_dir / date_id
+	last_mtime = -1
+	# 2022-12-07 PAL - Switching from glob() to scandir() - BEGIN
+	log_filenames = [
+		x
+		for x in os.scandir(logdir)
+		if x.is_file() and x.name.startswith("smplayer") and x.name.endswith(".log")
+	]
+	log_filenames = sorted(log_filenames, key=getmtime)
+	last_filename = log_filenames[-1]
+	last_mtime = getmtime(last_filename)
+	with tarfile.open(tarfilename, "w:xz") as tar:
+		for log_filename in log_filenames:
+			date_id = basename(dirname(log_filename.path))
+			yyyy = int(date_id[0:4])
+			mm = int(date_id[4:6])
+			dd = int(date_id[6:8])
+			with open(log_filename) as logfile:
+				for line in [x.rstrip() for x in logfile.readlines()]:
+					if re.search(log_regex, line):
+						if line not in seen_lines:
+							parts = line.split()
+							timepart = parts[0].lstrip("[").rstrip("]")
+							hh, mm, ss, ms = [int(x) for x in timepart.split(":")]
+							play_dt = datetime(
+								yyyy, mm, dd, hh, mm, ss, ms
+							).astimezone()
+							play_date = play_dt.date()
+							filename = " ".join(parts[3:-2]).strip('"')
+							csv_rows.append(
+								(
+									play_dt.timestamp(),
+									play_date,
+									play_dt.isoformat(" "),
+									filename,
+								)
+							)
+							seen_lines.append(line)
+			# Compress log file
+			# lzfilename = f"{log_filename}.xz"
+			# with open(log_filename, "rb") as fin, lzma.open(lzfilename, "wb") as fout:
+			# Reads the file by chunks to avoid exhausting memory
+			# 	shutil.copyfileobj(fin, fout)
+			# sleep(0.1)
+			# Set modification time to that of the last log file
+			# mtime = os.path.getmtime(log_filename)
+			# os.utime(lzfilename, (mtime, mtime))
+			# Add log file to archive
+			tar.add(log_filename)
+			sleep(0.1)
+			# Delete original log file
+			os.remove(log_filename)
+	# 2022-12-07 PAL - Switching from glob() to scandir() - END
+	sleep(0.1)
+	os.utime(tarfilename, times=(last_mtime, last_mtime))
+	# 2022-12-09 PAL - The last file still isn't being deleted . . .
+	if os.path.exists(last_filename):
+		os.remove(last_filename)
+
+	# Process rows from CSV log files
+	if csv_rows:
+		if not summaryfilename.exists():
+			print(f"Found {len(csv_rows):,d} lines to process")
+			summaryfilename.parent.mkdir(exist_ok=True)
+			columns = ["epochtime", "playdate", "playdatetime", "filename"]
+			df = pd.DataFrame(csv_rows, columns=columns)
+			df["playdatetime"] = pd.to_datetime(df["playdatetime"])
+			df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
+			if Config.SAVE_SUMMARIES:
+				# Save to tab-delimited file
+				df.to_csv(summaryfilename, sep="\t", header=columns, index=False)
+				os.utime(summaryfilename, times=(last_mtime, last_mtime))
+				os.utime(logdir, times=(last_mtime, last_mtime))
+	return df
+
+
 def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, playinfofilename: str | Path) -> pd.DataFrame:
 	# print(f"Play Date:  . . . . . . {play_date}")
 	# print(f"Log Filename  . . . . . {merged_filename}")
 	# print(f"PlayInfo Filename . . . {playinfofilename}")
 	#
 	# Extract media & time information from merged log file
-	start_regex = r"Core::startMplayer: file:"
-	stop_regex = r"Core::stopMplayer$"
-	play_regex = r"Playlist::playItem:"
-	patterns = "|".join([start_regex, stop_regex, play_regex])
+	log_regex = r"Core::startMplayer: file:"
 
 	if str(merged_filename).endswith(".xz"):
 		open = lzma.open
@@ -232,58 +289,37 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 	with open(merged_filename, "rt") as logfile:
 		lines = [x.rstrip() for x in logfile.readlines()]
 	# print(f"Line Count: {len(lines)}  {merged_filename}")
-	# info_lines = [x for x in lines if re.search(start_regex, x)]
-	info_lines = [x for x in lines if re.search(patterns, x)]
+	info_lines = [x for x in lines if re.search(log_regex, x)]
 	# print(f"Info Lines: {len(info_lines)}  {merged_filename}")
 
 	csv_rows = []
-	seen_epochs = []
+	date_id = play_date.strftime("%Y%m%d")
+	# print(f"Date ID: {date_id}")
 	yr = play_date.year
 	mo = play_date.month
 	d = play_date.day
+	# yyyy = int(date_id[0:4])
+	# mm = int(date_id[4:6])
+	# dd = int(date_id[6:8])
 
-	last_play_dt = None
-	# last_stop_dt = None
-	last_filename = None
 	for il in info_lines:
+		# print(il)
 		parts = il.split()
 		timepart = parts[0].lstrip("[").rstrip("]")
 		h, m, s, ms = [int(x) for x in timepart.split(":")]
-		dt = datetime(yr, mo, d, h, m, s, ms).astimezone()
+		play_dt = datetime(yr, mo, d, h, m, s, ms).astimezone()
+		play_date1 = play_dt.date()
 		filename = " ".join(parts[3:-2]).strip('"')
-		if filename:
-			play_dt = dt
-			stop_dt = None
-			last_filename = filename
-			last_play_dt = play_dt
-		else:
-			filename = last_filename
-			stop_dt = dt
-			last_stop_dt = stop_dt
-			play_dt = last_play_dt
-		if filename and stop_dt:
-			epochtime = play_dt.timestamp()
-			play_time = stop_dt - play_dt
-			play_secs = play_time.total_seconds()
-			if play_secs > 1800:
-				do_nothing()
-			if epochtime not in seen_epochs:
-				row = (epochtime, play_date, play_dt.isoformat(" "), stop_dt.isoformat(" "), filename, play_secs, play_time)
-				csv_rows.append(row)
-				seen_epochs.append(epochtime)
-			else:
-				do_nothing()
+		row = (play_dt.timestamp(), play_date, play_dt.isoformat(" "), filename,)
+		csv_rows.append(row)
+
 	if csv_rows:
-		if playinfofilename.exists() and Config.OVERWRITE_PLAYINFO_CSV:
-			os.remove(playinfofilename)
 		if not playinfofilename.exists():
 			playinfofilename.parent.mkdir(exist_ok=True)
-			columns = "epochtime playdate playdatetime stopdatetime filename play_secs play_time".split()
+			columns = ["epochtime", "playdate", "playdatetime", "filename"]
 			df = pd.DataFrame(csv_rows, columns=columns)
 			try:
 				df["playdatetime"] = pd.to_datetime(df["playdatetime"], format='ISO8601')
-				df["stopdatetime"] = pd.to_datetime(df["stopdatetime"], format='ISO8601')
-				df["play_time"] = pd.to_timedelta(df["play_time"])
 			except Exception as e:
 				print(e, file=sys.stderr)
 				do_nothing()
@@ -294,10 +330,11 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 				mtime = getmtime(merged_filename)
 				os.utime(playinfofilename, times=(mtime, mtime))
 				os.utime(playinfofilename.parent, times=(mtime, mtime))
+
 	return df
 
 
-def fetch_last_playdatetime_old() -> datetime:
+def fetch_last_playdatetime() -> datetime:
 	sql = f"SELECT max(playdatetime) FROM {tablename};"
 	with engine.connect() as conn:
 		# rows = dict(conn.execute(sa.text(sql)).fetchone())["last_playdatetime"]
@@ -305,7 +342,7 @@ def fetch_last_playdatetime_old() -> datetime:
 	return playdatetime
 
 
-def find_new_lines_old(
+def find_new_lines(
 	older_filename: str | Path, newer_filename: str | Path, merged_filename: str | Path
 ) -> int:
 	new_lines = []
@@ -354,84 +391,6 @@ def find_new_lines_old(
 				fout.writelines(new_lines)
 		do_nothing()
 	return len(new_lines)
-
-
-def get_log_entries(filename: str | Path) -> list[str]:
-	entries = []
-	# Sample timestamp: [03:21:17:080]
-	log_regex = r"^\[[012][0-9]:[0-5][0-9]:[0-5][0-9].[0-9]{3}\]"
-	if str(filename).endswith(".xz"):
-		open = lzma.open
-	else:
-		open = builtins.open
-	with open(filename, "rt") as logfile:
-		lines = [x.rstrip() for x in logfile.readlines()]
-	entry_lines = []
-	for line in lines:
-		if re.search(log_regex, line):
-			if entry_lines:
-				entries.append("\n".join(entry_lines))
-			entry_lines = [line,]
-		else:
-			entry_lines.append(line)
-	return entries
-
-
-def merge_logs(log_dir: str | Path, merged_filename: str | Path):
-	logfiles = sorted(glob(join(log_dir, "smplayer*log")))
-	last_mtime = getmtime(logfiles[-1])
-	if exists(merged_filename):
-		merged_entries = get_log_entries(merged_filename)
-	else:
-		merged_entries = []
-	found_new_entries = False
-	for logfile in logfiles:
-		new_entries = [
-			x.rstrip() for x in get_log_entries(logfile) \
-				if x not in merged_entries
-		]
-		if new_entries:
-			merged_entries.extend(new_entries)
-			found_new_entries = True
-			do_nothing()
-	if found_new_entries:
-		if str(merged_filename).endswith(".xz"):
-			open = lzma.open
-		else:
-			open = builtins.open
-		with open(merged_filename, "wt") as fp:
-			fp.writelines([f"{x}\n" for x in merged_entries])
-	# Set modification time to that of the most recent log file
-	os.utime(merged_filename, times=(last_mtime, last_mtime))
-	return
-
-
-def merge_logs_old(log_dir: str | Path, merged_filename: str | Path):
-	logfiles = sorted(glob(join(log_dir, "smplayer*log")))
-	last_mtime = getmtime(logfiles[-1])
-	merged_lines = []
-	if not exists(merged_filename):
-		# Create merged file from the first uncompressed log file
-		with (open(logfiles[0], "rb") as fin,
-			  lzma.open(merged_filename, "wb") as fout):
-			# Reads the file by chunks to avoid exhausting memory
-			merged_lines
-			shutil.copyfileobj(fin, fout)
-		logfiles.pop(0)
-	total_line_count = 0
-	for i, logfile in enumerate(logfiles):
-		# print(logfile)
-		j = i + 1
-		if j == len(logfiles):
-			break
-		line_count = find_new_lines_old(
-			logfiles[i], logfiles[j], merged_filename
-		)
-		total_line_count += line_count
-		do_nothing()
-	# Set modification time to that of the most recent log file
-	os.utime(merged_filename, times=(last_mtime, last_mtime))
-	return
 
 
 if __name__ == "__main__":

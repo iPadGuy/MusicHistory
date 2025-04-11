@@ -2,6 +2,6 @@
 
 BEGIN;
 
-DROP SCHEMA app_schema;
+DROP SCHEMA IF EXISTS new_media_library;
 
 COMMIT;

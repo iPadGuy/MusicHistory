@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# log_collector.py - Sunday, May 29, 2022
+""" Persist the SMPlayer log files by copying the log file at regular intervals """
+__version__ = '1.1.9'
+
+import os, sys, traceback
+import shutil
+from datetime import datetime, timedelta, timezone
+from glob import glob
+from os.path import getmtime
+from pathlib import Path
+
+__MODULE__ = os.path.splitext(os.path.basename(__file__))[0]
+
+
+def main():
+	"""
+	if the smplayer log file has been updated since the last snapshot, then create a new snapshot
+	:return:
+	"""
+	smplayer_logpath = Path("~/.config/smplayer/smplayer_log.txt").expanduser()
+	
+	if not smplayer_logpath.exists():
+		raise FileNotFoundError(f"SMPlayer log file '{smplayer_logpath}'")
+
+	log_mtime = smplayer_logpath.stat().st_mtime
+	log_mtime_dt = datetime.fromtimestamp(log_mtime).astimezone()
+	logdate = log_mtime_dt.strftime("%Y%m%d")
+	logtime = log_mtime_dt.strftime("%H%M%S")
+
+	snapshotdir = Path(f"~/.local/share/MusicHistory/{logdate}").expanduser()
+	snapshotdir.mkdir(exist_ok=True)
+	snapshot_filename = snapshotdir / f"smplayer_{logtime}.log"
+	snapshot_mtime = -1
+	try:
+		snapshots = snapshotdir.glob("*.log")
+		if snapshots:
+			snapshot_mtime = getmtime(max(snapshots, key=getmtime))
+	except Exception:
+		print(traceback.print_exc(), file=sys.stderr)
+	if log_mtime > snapshot_mtime:
+		shutil.copy2(smplayer_logpath, snapshot_filename)
+		# print(f"{smplayer_logpath} -> {snapshot_filename}")
+	return
+
+
+def do_nothing():
+	pass
+
+
+if __name__ == '__main__':
+	_run_dt = datetime.now().astimezone().replace(microsecond=0)
+	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_fdate = _run_dt.strftime("%Y-%m-%d")
+	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
+
+	main()

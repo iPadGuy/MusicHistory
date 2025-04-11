@@ -2,6 +2,6 @@
 
 BEGIN;
 
-SELECT pg_catalog.has_schema_privilege('media_library', 'usage');
+SELECT pg_catalog.has_schema_privilege('new_media_library', 'usage');
 
 ROLLBACK;

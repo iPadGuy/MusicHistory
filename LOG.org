@@ -1,10 +1,71 @@
 #+TITLE:	Music History
 #+SUBTITLE:	Log
+#+DATE:		Monday, June 13th, 2022
+#+LASTMOD:  
 #+OPTIONS:	toc:nil num:nil
-#+STARTUP:	indent show3levels
+#+STARTUP:	indent show4levels
 #+CATEGORY:	Projects
 #+TAGS:		log python MusicHistory MusicAnalytics smplayer mpv sql databases
 
+* Friday, April 11, 2025
+** Upgrades
+*** Database
+- Used Sqitch to create database scripts
+- Created new objects in ~new_media_library~ schema
+- ~dt_playhistory~ now has a ~stopdatetime~ column, for improved play duration calculations
+- Renamed ~media_library~ schema to ~media_library_2024~ (The new ~dt_playhistory~ only has data for 2025)
+- Renamed ~new_media_library~ schema to ~media_library~
+*** Log Collector
+- Now runs as a user service (see ~service~ directory)
+- Command installed at ~~/.local/sbin~
+*** Log Extractor
+- ~log_extractor3~ replaces ~log_extractor~
+*** Build Playlists
+- Works with the new ~dt_playhistory~ table, which includes a ~stopdatetime~ column
+* Monday, March 31, 2025
+** Capturing SMPlayer Logs
+*** New Method
+- Uses the ~watchdog~ library to watch the SMPlayer log file
+- The ~on_modified~ and ~on_closed~ events get the process IDs of SMPlayer and MPV
+- When the MPV process ID changes, it means SMPlayer is playing a new file
+- Snapshots are created/updated when the MPV process ID changes
+- Snapshot filenames contain the process IDs of SMPlayer instances
+- This should greatly improve the log extraction process, since there shouldn't be any redundant data
+*** Installation
+#+begin_example shell
+cd service
+systemctl --user enable log-collector.service
+systemctl --user start  log-collector.service
+systemctl --user status log-collector.service
+#+end_example
+- Disabled ~log_collector~ in ~~/.fcrontab~  
+** Log Extraction
+*** New Method
+- ~log_extractor3~ - This began when I discovered incorrect play times (durations) for the last song in a log file where SMPlayer is shutdown (usually after lunch or dinner)
+- I added extra search patterns, in order to find when a song stops playing, rather than rely on the time difference between songs
+- Added ~stopdatetime~ column to ~dt_playhistory3~
+- Eventually, I will integrate ~SQitch~ for the database components
+- With the new log collector, I shouldn't need to examine a lot of log files to find unique information; I should be able to just load the log files without checking for duplicate log entries
+* Sunday, March 30, 2025
+** New Laptop & New Linux Installation
+*** Conflicting Versions of NumPy
+- System version . . . 1.26.4
+- User version . . . . 2.2.4
+- Downgrading the virtual environment didn't resolve the issue
+- Specifying ~/#!usr/bin/env python3.12~ in the shebang line works
+** Capturing SMPLayer Logs
+*** Background
+- The SMPlayer log doesn't include the date--only the time
+- SMPlayer overwrites its log file when the program stars
+- To capture data in the log, they must be copied to a location where they won't be overwritten, and the date must be stored with the log (ie. in the filename)
+*** Current Method
+- Check the SMPlayer log file every six minutes
+- Copy the log file if it is newer than the last copy (or if there are no other copies)
+- Copies are saved with timestamps in the filename
+- This takes disk space and code to remove duplicate log entries
+*** New Method
+- Watch the SMPlayer process and periodically update a single copy with the process ID(s) in the filename
+- This limits the number of copies to process and handles multiple instances of SMPlayer
 * Tuesday, March 18, 2025
 ** Research:
 *** Top Ten Playlist Experiments

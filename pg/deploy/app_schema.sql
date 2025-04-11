@@ -2,6 +2,6 @@
 
 BEGIN;
 
-CREATE SCHEMA media_library;
+CREATE SCHEMA new_media_library;
 
 COMMIT;

@@ -1,58 +1,209 @@
-#!/usr/bin/env python3
+#!/home/patrick/.local/share/virtualenvs/MusicHistory-nP00uPHO/bin/python
 # -*- coding: utf-8 -*-
-# log_collector.py - Sunday, May 29, 2022
+# log_collector2 - Friday, March 28, 2025
 """ Persist the SMPlayer log files by copying the log file at regular intervals """
-__version__ = '1.1.9'
+__version__ = "1.3.35"
 
-import os, sys, traceback
+import getpass
+import os
 import shutil
+import sys
+import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from glob import glob
-from os.path import getmtime
+from os.path import exists, join, getmtime
 from pathlib import Path
+from time import sleep
 
-__MODULE__ = os.path.splitext(os.path.basename(__file__))[0]
+import psutil
+from psutil import NoSuchProcess, Process
+from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent, FileClosedEvent
+from watchdog.observers import Observer
+
+basedir = Path(__file__).resolve().parent
+__module__ = Path(__file__).resolve().stem
+
+
+class MyEventHandler(FileSystemEventHandler):
+
+	def __init__(self):
+		self._last_trigger = -1
+		self._mpv_pids = []
+		self._smplayer_pids = []
+
+	@staticmethod
+	def get_pids(pgname: str) -> [int]:
+		pids = []
+		for proc in psutil.process_iter(["name", "cmdline", "username"]):
+			# search for matches in the process name and cmdline
+			if proc.info["username"] == _username:
+				do_nothing()
+				if (proc.info["name"] == pgname
+					or proc.info["cmdline"] and proc.info["cmdline"][0] == pgname
+				):
+					pids.append(proc.pid)
+			do_nothing()
+		return pids
+
+	@property
+	def last_trigger(self):
+		return self._last_trigger
+
+	@last_trigger.setter
+	def last_trigger(self, value):
+		self._last_trigger = value
+
+	@property
+	def mpv_pids(self):
+		return self._mpv_pids
+
+	@mpv_pids.setter
+	def mpv_pids(self, value):
+		self._mpv_pids = value
+
+	@staticmethod
+	def now():
+		return datetime.now().astimezone().replace(microsecond=0)
+
+	"""def on_any_event(self, event: FileSystemEvent) -> None:
+		pids = self.get_pids(_smplayer)
+		# This logic is meant to remember the process ID of SMPlayer after it quits
+		if pids:
+			if pids != self.smplayer_pids:
+				self.smplayer_pids = pids
+		else:
+			do_nothing()"""
+
+	def on_closed(self, event: FileClosedEvent) -> None:
+		pids = self.get_pids(_smplayer)
+		print(f"{self.now()} {pids} Closed: {event.src_path}")
+		print(f"{self.now()} {self.smplayer_pids} Closed: {event.src_path}")
+		if not pids:
+			do_nothing()
+		self.take_snapshot(event.src_path)
+
+	def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
+		new_mpv_process = False
+		# Ignore triggers less than one second apart
+		if time.time() - self.last_trigger > 1:
+			# Check SMPlayer process IDs
+			pids = self.get_pids(_smplayer)
+			# This logic is meant to remember the process ID of SMPlayer after it quits
+			if pids:
+				if pids != self.smplayer_pids:
+					self.smplayer_pids = pids
+			else:
+				do_nothing()
+			# Check MPV process IDs
+			mpv_pids = self.get_pids(_mpv)
+			# A new MPV process means a new song or video is being played
+			if mpv_pids:
+				if mpv_pids != self.mpv_pids:
+					self._mpv_pids = mpv_pids
+					new_mpv_process = True
+			else:
+				do_nothing()
+			if new_mpv_process:
+				# print(f"{self.now().replace()} {self.smplayer_pids} Modified: {event.src_path}")
+				self.take_snapshot(event.src_path)
+				self.last_trigger = time.time()
+		# else:
+		# 	print(f"{self.now()} Ignoring on_modified event for '{event.src_path}'")
+
+	@property
+	def smplayer_pids(self) -> list[int]:
+		return self._smplayer_pids
+
+	@smplayer_pids.setter
+	def smplayer_pids(self, value):
+		self._smplayer_pids = value
+
+	def take_snapshot(self, source):
+		log_mtime = os.stat(source).st_mtime
+		log_mtime_dt = datetime.fromtimestamp(log_mtime).astimezone()
+		logdate = log_mtime_dt.strftime("%Y%m%d")
+		# Replaced logtime with slug for running process IDs
+		# logtime = log_mtime_dt.strftime("%H%M%S")
+		slug = "_".join([str(x) for x in self.smplayer_pids])
+		snapshot_dir = join(_datadir, logdate)
+		filename = join(snapshot_dir, f"{_smplayer}_{slug}.log")
+		os.makedirs(snapshot_dir, exist_ok=True)
+		if exists(filename):
+			operation = "Updating"
+			# mtime = getmtime(filename)
+		else:
+			operation = "Creating"
+			# mtime = -1
+		# print(f"{self.now()} {operation} snapshot at '{filename}' . . .")
+		shutil.copy2(source, filename)
 
 
 def main():
-	"""
-	if the smplayer log file has been updated since the last snapshot, then create a new snapshot
-	:return:
-	"""
-	smplayer_logpath = Path("~/.config/smplayer/smplayer_log.txt").expanduser()
-	
-	if not smplayer_logpath.exists():
-		raise FileNotFoundError(f"SMPlayer log file '{smplayer_logpath}'")
-
-	log_mtime = smplayer_logpath.stat().st_mtime
-	log_mtime_dt = datetime.fromtimestamp(log_mtime).astimezone()
-	logdate = log_mtime_dt.strftime("%Y%m%d")
-	logtime = log_mtime_dt.strftime("%H%M%S")
-
-	snapshotdir = Path(f"~/.local/share/MusicHistory/{logdate}").expanduser()
-	snapshotdir.mkdir(exist_ok=True)
-	snapshot_filename = snapshotdir / f"smplayer_{logtime}.log"
-	snapshot_mtime = -1
+	event_handler = MyEventHandler()
+	observer = Observer()
+	# observer.schedule(event_handler, ".", recursive=True)
+	observer.schedule(event_handler, _logfile, recursive=False)
+	observer.start()
 	try:
-		snapshots = snapshotdir.glob("*.log")
-		if snapshots:
-			snapshot_mtime = getmtime(max(snapshots, key=getmtime))
-	except Exception:
-		print(traceback.print_exc(), file=sys.stderr)
-	if log_mtime > snapshot_mtime:
-		shutil.copy2(smplayer_logpath, snapshot_filename)
-		# print(f"{smplayer_logpath} -> {snapshot_filename}")
-	return
+		while True:
+			time.sleep(1)
+	except KeyboardInterrupt:
+		print("Exiting . . .")
+	finally:
+		observer.stop()
+		observer.join()
 
 
 def do_nothing():
 	pass
 
 
+def running() -> bool:
+	already_running = False
+
+	if os.path.isfile(_pidfilename):
+		with open(_pidfilename, "rt") as pidfile:
+			oldpid = int(pidfile.read())
+		if psutil.pid_exists(oldpid):
+			print(f"Process already running ({oldpid})")
+			already_running = True
+	return already_running
+
+
+def create_pidfile():
+	print(f"Starting new process: {_pid}")
+	with open(_pidfilename, "wt") as pidfile:
+		pidfile.write(str(_pid))
+	return
+
+
+def remove_pidfile():
+	os.remove(_pidfilename)
+	return
+
+
 if __name__ == '__main__':
 	_run_dt = datetime.now().astimezone().replace(microsecond=0)
 	_run_utc = _run_dt.astimezone(timezone.utc).replace(tzinfo=None)
+	_run_ts = _run_dt.timestamp()
 	_fdate = _run_dt.strftime("%Y-%m-%d")
 	_fdatetime = _run_dt.strftime("%Y%m%d_%H%M%S")
 
-	main()
+	_pid = os.getpid()
+	_smplayer = "smplayer"
+	_mpv = "mpv"
+	_userid = os.getuid()
+	_username = getpass.getuser()
+	_watchdir = "/home/patrick/.local/share/MusicHistory/20250330"
+	_logfile = "/home/patrick/.config/smplayer/smplayer_log.txt"
+	_datadir = Path(f"~/.local/share/MusicHistory").expanduser()
+
+	_runtime_dir = os.getenv("XDG_RUNTIME_DIR", default=f"/tmp/{_userid}")
+	os.makedirs(_runtime_dir, exist_ok=True)
+	_pidfilename = Path(_runtime_dir) / f"{__module__}.pid"
+
+	if not running():
+		create_pidfile()
+		main()
+		remove_pidfile()
