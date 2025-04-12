@@ -3,7 +3,7 @@
 # log_extractor3 - Tuesday, March 18, 2025
 """ Extract & analyze timestamps and filenames from collected SMPlayer logs (via log_collector)
 	and generate Top XXX lists """
-__version__ = "0.7.40"
+__version__ = "0.7.42"
 
 import builtins
 import concurrent.futures
@@ -29,9 +29,7 @@ import sqlalchemy as sa
 import xdg_base_dirs as xdg
 from dateutil.parser import parse, ParserError
 from loguru import logger
-from sqlalchemy import create_engine, text
-# from tabulate import tabulate
-# from xdg import XDG_DATA_HOME, XDG_CONFIG_HOME
+from sqlalchemy import create_engine
 
 appname = "MusicHistory"
 _basedir = Path(__file__).resolve().parent.parent
@@ -54,14 +52,13 @@ except ModuleNotFoundError:
 	raise ModuleNotFoundError("config.py")
 
 
-
 def main():
 	start_date = get_last_playdatetime().date()
 	end_date = (_run_dt - timedelta(days=1)).date()
 	day_delta = timedelta(days=1)
 	os.chdir(_data_dir)
 	if start_date < end_date:
-		for i in range(0, (end_date - start_date).days + 1):
+		for i in range(1, (end_date - start_date).days + 1):
 			process_date = start_date + i * day_delta
 			date_id = process_date.strftime("%Y%m%d")
 			logdir = Path(date_id)
@@ -80,9 +77,8 @@ def main():
 					for line in [x.rstrip() for x in result.stdout.splitlines()]:
 						print(line)
 				merge_logs(os.getcwd(), merged_filename)
-			playinfo_filename = f"playinfo_{date_id}.csv.xz"
-			df = extract_playinfo(process_date, merged_filename, playinfo_filename)
-
+			# playinfo_filename = f"playinfo_{date_id}.csv.xz"
+			df = extract_playinfo(process_date, merged_filename)  # , playinfo_filename)
 			rows = df.to_sql(tablename, con=engine, schema=schema,
 							 if_exists="append", index=False)
 			logger.info(f"Added {rows} rows to database for {process_date}")
@@ -130,13 +126,9 @@ def main_old(log_date, force):
 	playinfo_filename = log_dir / f"playinfo_{date_id}.csv.xz"
 
 	df = extract_playinfo(log_date, merged_filename, playinfo_filename)
-	# logger.debug(df)
-
-	# ToDo: Add table dt_playhistory3
 	rows = df.to_sql(tablename, con=engine, schema=schema,
 					 if_exists="append", index=False)
 	logger.info(f"Added {rows} rows to database for {log_date}")
-
 	return
 
 
@@ -175,20 +167,14 @@ def elapsed_timer():
 	elapser = lambda: end-start
 
 
-# ToDo: Re-engineer dt_playhistory to include stop time
-def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, playinfofilename: str | Path) -> pd.DataFrame:
-	# logger.debug(f"Play Date:  . . . . . . {play_date}")
-	# logger.debug(f"Log Filename  . . . . . {merged_filename}")
-	# logger.debug(f"PlayInfo Filename . . . {playinfofilename}")
-	#
+def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, playinfo_filename: str | Path=None) -> pd.DataFrame:
+	df = pd.DataFrame()
+
 	# Extract media & time information from merged log file
 	start_regex = r"Core::startMplayer: file:"
 	stop_regex = r"Core::stopMplayer$"
 	play_regex = r"Playlist::playItem:"
 	patterns = "|".join([start_regex, stop_regex, play_regex])
-
-	if type(playinfofilename) is not Path:
-		playinfofilename = Path(playinfofilename)
 
 	if str(merged_filename).endswith(".xz"):
 		open = lzma.open
@@ -197,10 +183,7 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 	logger.debug(f"Reading {merged_filename} . . .")
 	with open(merged_filename, "rt") as logfile:
 		lines = [x.rstrip() for x in logfile.readlines()]
-	# logger.debug(f"Line Count: {len(lines)}  {merged_filename}")
-	# info_lines = [x for x in lines if re.search(start_regex, x)]
 	info_lines = [x for x in lines if re.search(patterns, x)]
-	# logger.debug(f"Info Lines: {len(info_lines)}  {merged_filename}")
 
 	csv_rows = []
 	seen_plays = []
@@ -209,7 +192,6 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 	d = play_date.day
 
 	last_play_dt = None
-	# last_stop_dt = None
 	last_filename = None
 	for il in info_lines:
 		parts = il.split()
@@ -241,34 +223,32 @@ def extract_playinfo(play_date: datetime.date, merged_filename: str | Path, play
 			else:
 				do_nothing()
 
-	# ToDo: Improve this logic Config options seem to be competing, and SAVE_SUMMARIES
-	#       is too far down
 	if csv_rows:
-		if exists(playinfofilename) and Config.OVERWRITE_PLAYINFO_CSV:
-			os.remove(playinfofilename)
-		if not exists(playinfofilename):
-			playinfofilename.parent.mkdir(exist_ok=True)
-			logger.debug(f"Building DataFrame for {play_date} . . .")
-			columns = "playdate playdatetime stopdatetime filename play_secs play_time".split()
-			df = pd.DataFrame(csv_rows, columns=columns)
-			try:
-				df["playdatetime"] = pd.to_datetime(df["playdatetime"], format='ISO8601')
-				df["stopdatetime"] = pd.to_datetime(df["stopdatetime"], format='ISO8601')
-				df["play_time"] = pd.to_timedelta(df["play_time"])
-			except Exception as e:
-				logger.exception(e, file=sys.stderr)
-				do_nothing()
-			df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
-			df["play_time"] = df["play_time"].astype(str)
-			# Sort the DataFrame
-			df.sort_values(by=["playdatetime"], inplace=True)
-			if Config.SAVE_SUMMARIES:
-				# Save to tab-delimited file
-				logger.info(f"Saving Summary to {playinfofilename} . . .")
-				df.to_csv(playinfofilename, sep="\t", header=columns, index=False)
-				mtime = getmtime(merged_filename)
-				os.utime(playinfofilename, times=(mtime, mtime))
-				os.utime(playinfofilename.parent, times=(mtime, mtime))
+		logger.debug(f"Building DataFrame for {play_date} . . .")
+		columns = "playdate playdatetime stopdatetime filename play_secs play_time".split()
+		df = pd.DataFrame(csv_rows, columns=columns)
+		try:
+			df["playdatetime"] = pd.to_datetime(df["playdatetime"], format='ISO8601')
+			df["stopdatetime"] = pd.to_datetime(df["stopdatetime"], format='ISO8601')
+			df["play_time"] = pd.to_timedelta(df["play_time"])
+		except Exception as e:
+			logger.exception(e, file=sys.stderr)
+			do_nothing()
+		df["playdate"] = pd.to_datetime(df["playdate"]).dt.date
+		df["play_time"] = df["play_time"].astype(str)
+		# Sort the DataFrame
+		df.sort_values(by=["playdatetime"], inplace=True)
+		if playinfo_filename:
+			if type(playinfo_filename) is not Path:
+				playinfo_filename = Path(playinfo_filename)
+			playinfo_filename.parent.mkdir(exist_ok=True)
+
+			# Save to tab-delimited file
+			logger.info(f"Saving Summary to {playinfo_filename} . . .")
+			df.to_csv(playinfo_filename, sep="\t", header=columns, index=False)
+			mtime = getmtime(merged_filename)
+			os.utime(playinfo_filename, times=(mtime, mtime))
+			os.utime(playinfo_filename.parent, times=(mtime, mtime))
 	return df
 
 
@@ -309,7 +289,6 @@ def get_log_entries(filename: str | Path) -> list[str]:
 	return entries
 
 
-# ToDo: Add multi-threading with the concurrent.futures module, like in ydl-fetch
 def merge_logs(log_dir: str | Path, merged_filename: str | Path, archive_exists: bool=False):
 	logger.debug(f"Merging Logs . . .")
 	logfiles = sorted(glob(join(log_dir, "smplayer*log")), key=getmtime)
